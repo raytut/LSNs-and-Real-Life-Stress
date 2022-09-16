@@ -1,0 +1,10 @@
+Trial_Type	Stim_Shown	Stim_Valence	Trial_On	Trial_Off	ReactionTime	Button_Press	Correct_Resp	Block_On	Block_Off	ExperimentOn/Off
+Trial_Type	Stim_Shown	Stim_Valence	Trial_On	Trial_Off	ReactionTime	Button_Press	Correct_Resp	Block_On	Block_Off	ExperimentOn/Off
+1	odd_neg_33.bmp	0	21215	22051	0	0	0	21215	0	15204	0
+1	odd_neu_1.bmp	1	23450	24246	0	0	0	21215	0	15204	0
+1	odd_neu_1.bmp	1	25692	26477	0	0	0	21215	0	15204	0
+1	odd_neu_1.bmp	1	27956	28724	0	0	0	21215	0	15204	0
+Trial_Type	Stim_Shown	Stim_Valence	Trial_On	Trial_Off	ReactionTime	Button_Press	Correct_Resp	Block_On	Block_Off	ExperimentOn/Off
+1	odd_neg_33.bmp	0	19046	19844	0	0	0	19046	0	13035	0
+1	odd_neu_1.bmp	1	21285	22132	0	0	0	19046	0	13035	0
+1	odd_neu_1.bmp	1	23518	24370	0	0	0	19046	0	13035	0

@@ -1,0 +1,106 @@
+##################################################################################
+#																											#
+#  									 ODDBALL	 TASK													#
+#																											#
+#																											#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 		Get Oddball Text File Settings
+#--------------------------------------------------------------------------------#
+
+## Text File loading for trial order
+string OddStimulusSet = "trial_odd_sub" + string(subjnr) + "_s" + string(session) + "_r"+ string(run)+".txt";	
+input_file odd_stimset = new input_file;
+
+## Make empty arrays for info from txt
+array <string> odd_stimname[1][odd_n_trials];	  											#bitmap names
+array <int> odd_stimcat[1][odd_n_trials];
+array <int> odd_type[1][odd_n_trials];														#Target or Lure (1 or 2)
+
+## Stimfile is located in randlist folder
+odd_stimset.open( ("trials_odd\\" + OddStimulusSet));								
+
+## Load information from stimulus txt file
+int counter = 1;												
+loop until																									
+   counter > odd_n_trials 														
+begin
+	odd_stimname[1][counter] = odd_stimset.get_string();
+	odd_stimcat[1][counter]= odd_stimset.get_int();
+	odd_type[1][counter] = odd_stimset.get_int();
+	counter = counter + 1;
+end; 
+
+## Load bitmaps into array
+array <bitmap> odd_stimbitmap [1][odd_n_trials];
+loop int i = 1 until i > odd_n_trials 
+begin
+   odd_stimbitmap [1] [i]=new bitmap(odd_stimname[1][i]);
+	odd_stimbitmap [1] [i].load();
+   i = i + 1;
+end;
+
+#--------------------------------------------------------------------------------#
+# 		Oddball Subroutines												
+#--------------------------------------------------------------------------------#
+
+## Load Stimulus
+sub odd_bmp_selection (int k)
+begin
+	# Set ISI
+	int odd_ISI=(random(750,850));
+	iCorrectLocation = 0;
+	
+	# Set and Show Oddball
+   odd_pic.set_part(1, odd_stimbitmap[1][k]);
+	trial_oddball.set_duration(odd_ISI);
+	event44.set_duration(odd_ISI);
+	
+	# Log Onset and Valence
+	iStimOn =clock.time();
+	iValence = odd_stimcat [1][k];
+	
+	# Send to Eyetracker + Show Stim
+	oport.send_code(30);
+	trial_oddball.present();
+
+	# Response
+	resp = 0; RT = 0; pressed = 0;
+	loop until clock.time() >= ((iStimOn+2220)) 
+	begin
+		# Log offset
+		iStimOff =clock.time();
+		# Present Fixx
+		fixationdot.present();
+		wait (2220-odd_ISI);
+		if (response_manager.response_count() == 1) then
+			if pressed == 0 then	
+				pressed = 1;
+				resp = response_manager.last_response();
+				RT = (response_manager.last_response_data().time()) - iStimOn;
+			end;
+		end;
+	end;
+	
+	# Log Picture + Write to Log
+	sStimPic = odd_stimname[1][k];
+	WriteToOutputFile (sMRILogFileDir)
+end;
+
+
+## Oddball Subroutine
+int odd_trialcounter=1;
+sub odd_subroutine begin
+	# Log
+	iBlockOn = clock.time();
+	# Loop
+	loop int current_stim = 1;until current_stim > 12  
+		begin 
+		odd_bmp_selection(odd_trialcounter);
+		current_stim = current_stim + 1;		
+		odd_trialcounter = odd_trialcounter + 1;
+	end;
+	# Log
+	iBlockOff = clock.time();
+end;

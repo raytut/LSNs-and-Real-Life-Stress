@@ -1,0 +1,265 @@
+##################################################################################
+#																											
+#  								Word Learning + Retrieval											
+#																											
+#																											
+#																											
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 	Settings
+#--------------------------------------------------------------------------------#
+
+int wordenc_n_trials = 60;
+int wordret_n_trials = 120;
+
+
+## TEXT FILES FOR WORD ENCODING
+##==============================
+
+## Text File loading for trial order
+string WordEncListSet = "trial_wordenc_sub" + string(subjnr) + "_s" + string(session) + ".txt";	
+input_file wordenc_stimset = new input_file;
+
+## Make empty arrays for info from txt
+array <string> wordenc_stimname[1][wordenc_n_trials];	
+array <int> wordenc_stimval[1][wordenc_n_trials];
+array <int> wordenc_stimtype[1][wordenc_n_trials];
+
+## Stimfile is located in randlist folder
+wordenc_stimset.open( ("trial_words\\" + WordEncListSet));		
+
+## Load information from stimulus txt file
+int wordenc_counter = 1;												
+loop until wordenc_counter > wordenc_n_trials 														
+begin
+	wordenc_stimname[1][wordenc_counter] = wordenc_stimset.get_string();
+	wordenc_stimval[1][wordenc_counter]= wordenc_stimset.get_int();
+	wordenc_stimtype[1][wordenc_counter]= wordenc_stimset.get_int();
+	wordenc_counter = wordenc_counter + 1;
+end; 
+
+
+## TEXT FILES FOR WORD RETRIEVAL
+##===============================
+
+## Text File loading for trial order
+string WordRetListSet = "trial_wordret_sub" + string(subjnr) + "_s" + string(session) + ".txt";	
+input_file wordret_stimset = new input_file;
+
+## Make empty arrays for info from txt
+array <string> wordret_stimname[1][wordret_n_trials];	
+array <int> wordret_stimval[1][wordret_n_trials];
+array <int> wordret_stimtype[1][wordret_n_trials];
+
+## Stimfile is located in randlist folder
+wordret_stimset.open( ("trial_words\\" + WordRetListSet));		
+
+## Load information from stimulus txt file
+int wordret_counter = 1;												
+loop until wordret_counter > wordret_n_trials													
+begin
+	wordret_stimname[1][wordret_counter] = wordret_stimset.get_string();
+	wordret_stimval[1][wordret_counter]= wordret_stimset.get_int();
+	wordret_stimtype[1][wordret_counter]=wordret_stimset.get_int();
+	wordret_counter = wordret_counter + 1;
+end; 
+
+
+
+#--------------------------------------------------------------------------------#
+# 		Word List Subroutines												
+#--------------------------------------------------------------------------------#
+
+
+## Word Encoding
+##===============
+
+## Random Flanker Integer
+int iRand1=(random(20,25));
+int iRand2=(random(40,45));
+int iISI=random(3000, 4000);
+
+## Load and Present Words
+sub wordenc_sub
+begin
+	loop int k=1; until k >  wordenc_n_trials
+	begin
+		
+		
+		# Set and Show Word. Two random color changes for attention
+		word_text.set_caption(wordenc_stimname[1][k]);
+		word_text.redraw();
+		sStimPic= (wordenc_stimname[1][k]);
+		
+		trial_resp_on.present();
+		if k==iRand1  then
+			word_text.set_font_color(255, 0, 0, 255);
+			word_text.redraw();
+			iStimOn = clock.time();
+			word_pic.present();
+			iStimType = 4;
+			iResp = response_manager.last_response();
+		elseif k==iRand2 then
+			word_text.set_font_color(255, 0, 0, 255);
+			word_text.redraw();
+			iStimOn = clock.time();
+			word_pic.present();
+			iStimType = 5;
+			iResp = response_manager.last_response();
+		else
+			word_text.set_font_color(255, 255, 255, 255);
+			word_text.redraw();
+			iStimOn = clock.time();
+			word_pic.present();
+			iStimType = 1;
+		end;
+		
+		wait(3500);
+		iStimOff = clock.time();
+		
+		
+		# Show Fixation Cross + Log
+		fixationcross.present();
+		iResp=response_manager.total_response_count();
+		wait (1000);
+		WriteToOutputFile(sBehLog);
+		iResp = 0;
+		# Counter and Response Update
+		k = k + 1;
+	end;
+end;
+
+
+## Word Retrieval
+##===============
+
+## Ret Load and Present Words
+
+sub wordret_sub
+begin
+	loop int ret_count=1 until ret_count > wordret_n_trials
+	begin
+		
+		# Set and Show Word
+		trial_resp_on.present();
+		word_text2.set_caption(wordret_stimname[1][ret_count]);
+		sStimPic= (wordret_stimname[1][ret_count]);
+		word_text2.redraw();
+		opt_circles.present();
+		iStimOn = clock.time();
+		
+		# Wait for Button Press or 7 sec
+		WaitForButtonpressTime (7000);
+		
+		# Check for Which Button Pressed
+		if iButtonPressed == response_manager.total_response_count() then
+			opt_circles.present();
+		elseif iButtonPressed < response_manager.total_response_count () then
+			iResp=response_manager.last_response();
+			iRT = (clock.time() - iStimOn);
+			if iResp == 1 then
+				opt_circle1.set_color(44,205,239,250);
+				opt_circle1.redraw();
+			elseif iResp==2 then
+				opt_circle2.set_color(44,205,239,250);
+				opt_circle2.redraw();		
+			elseif iResp == 3 then
+				opt_circle3.set_color(44,205,239,250);
+				opt_circle3.redraw();
+			elseif iResp== 4 then
+				opt_circle4.set_color(44,205,239,250);
+				opt_circle4.redraw();
+			elseif iResp == 5 then
+				opt_circle5.set_color(44,205,239,250);
+				opt_circle5.redraw();
+			elseif iResp== 6 then
+				opt_circle6.set_color(44,205,239,250);
+				opt_circle6.redraw();
+			end;
+			iButtonPressed = iButtonPressed+1;
+		end;	
+		
+		# Redraw with indice
+		trial_resp_off.present();
+		opt_circles.present();
+		wait (1000);
+		iStimOff = clock.time();
+		iStimVal = wordret_stimval[1][ret_count];
+		iStimType = wordret_stimtype[1][ret_count];
+		
+		# Make White Again
+		opt_circle1.set_color(255, 255, 255, 255);
+		opt_circle1.redraw();
+		opt_circle2.set_color(255, 255, 255, 255);
+		opt_circle2.redraw();
+		opt_circle3.set_color(255, 255, 255, 255);
+		opt_circle3.redraw();
+		opt_circle4.set_color(255, 255, 255, 255);
+		opt_circle4.redraw();
+		opt_circle5.set_color(255, 255, 255, 255);
+		opt_circle5.redraw();
+		opt_circle6.set_color(255, 255, 255, 255);
+		opt_circle6.redraw();
+		
+		# Present Fixation for 2 sec
+		word_text2.set_caption(" + ");
+		word_text2.redraw();
+		opt_circles.present();
+		wait_interval (2000);
+		ret_count=ret_count+1;
+		WriteToOutputFile(sBehLog);
+	end;
+end;
+
+
+## Free recall: 
+##===============
+
+int c_time1;
+int c_time2; 
+
+sub FreeRecall_sub
+begin
+	int LastButton;
+	c_time1 = clock.time();
+	loop int i=1;
+	until response_manager.last_response() == 5 || c_time2 >= (c_time1 + 420000)
+	begin
+		GetKeyboardInput ("Woord dat je nu typt:");
+		if i < 13 then
+			sText.append(sKeyboardInput + " - ");
+			t_Info1.set_caption("Woorden die je getypt hebt: \n" + sText);
+			t_Info1.redraw();
+			t_Info2.redraw();
+			p_Text.present();
+			i = i+1;
+		elseif i < 25 then
+			sText2.append(sKeyboardInput + " - ");
+			t_Info3.set_caption(sText2);
+			t_Info3.redraw();
+			p_Text.present();
+			i = i+1;
+		elseif i < 37 then
+			sText3.append(sKeyboardInput + " - ");
+			t_Info4.set_caption(sText3);
+			t_Info4.redraw();
+			p_Text.present();
+			i = i+1;
+		elseif i < 49 then
+			sText4.append(sKeyboardInput + " - ");
+			t_Info5.set_caption(sText4);
+			t_Info5.redraw();
+			p_Text.present();
+			i = i+1;
+		elseif i < 80 then
+			sText5.append(sKeyboardInput + " - ");
+			t_Info6.set_caption(sText5);
+			t_Info6.redraw();
+			p_Text.present();
+			i = i+1;
+		end;
+		c_time2 = clock.time();
+		wait (100);
+		WriteToOutputFile (sWordRecall);
+	end;
+end;

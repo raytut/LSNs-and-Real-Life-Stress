@@ -1,0 +1,146 @@
+##########################################
+#
+#  EMA_BEH:  Matrices PCL script
+#
+##########################################
+
+#-----------------------------------------#
+# 	Settings
+#-----------------------------------------#
+
+int matrix_n_trials=36;
+
+stimulus_data my_data;
+int resp_button;
+
+##========================================#
+##  Load Matrices Text Files
+##========================================#
+
+## Text File loading for trial order
+string MatrixStimulusSet = "trial_matrix_sub" + string(subjnr) + "_s" + ".txt";	
+input_file matrix_stimset = new input_file;
+
+## Make empty arrays for info from txt
+array <string> matrix_stimname[1][matrix_n_trials];	  											
+array <int> matrix_stimcorr[1][matrix_n_trials];
+
+
+## Stimfile is located in trial_matrix folder
+matrix_stimset.open( ("trial_matrix\\" + MatrixStimulusSet));								
+
+## Load information from stimulus txt file
+int matrix_counter = 1;												
+loop until matrix_counter > matrix_n_trials 														
+begin
+	matrix_stimname[1][matrix_counter] = matrix_stimset.get_string();
+	matrix_stimcorr[1][matrix_counter]= matrix_stimset.get_int();
+	matrix_counter = matrix_counter + 1;
+end; 
+
+## Load bitmaps into array
+array <bitmap> matrix_stimbitmap [1][matrix_n_trials];
+loop int i = 1 until i > matrix_n_trials 
+begin
+   matrix_stimbitmap [1] [i]=new bitmap(matrix_stimname[1][i]);
+	matrix_stimbitmap [1] [i].load();
+   i = i + 1;
+end;
+
+##================================================================##
+## 	Matrix Examples
+##================================================================##
+
+## moved to Definitions
+
+##================================================================##
+## 	Matrix Task
+##================================================================##
+
+## Ret Load and Present Matrices ## NEED TO ADD RESPONSES##
+sub matrices_sub
+begin
+	loop int matrix_count=1 until matrix_count > matrix_n_trials
+	begin
+		iCorrectAns = (matrix_stimcorr[1][matrix_count]);
+		# Set and Show Matrices
+		trial_resp_on.present();
+		matrix_pic.set_filename(matrix_stimname[1][matrix_count]);
+		matrix_pic.load();
+		sStimPic= (matrix_stimname[1][matrix_count]);
+		opt_matrices.present();
+		iStimOn = clock.time();
+		
+		# Wait for Button Press or 60 sec 
+		WaitForButtonpressTime (59999);
+		
+		my_data = stimulus_manager.last_stimulus_data();
+		resp_button = iButtonPressed;
+		
+		# Check for Which Button Pressed
+		if iButtonPressed == response_manager.total_response_count() then
+			opt_matrices.present();
+		elseif iButtonPressed < response_manager.total_response_count () then
+			iResp=response_manager.last_response();
+			iRT = (clock.time() - iStimOn);
+			if iResp == 1 then
+				opt_matcircle1.set_color(44,205,239,250);
+				opt_matcircle1.redraw();
+			elseif iResp == 2 then
+				opt_matcircle2.set_color(44,205,239,250);
+				opt_matcircle2.redraw();		
+			elseif iResp == 3 then
+				opt_matcircle3.set_color(44,205,239,250);
+				opt_matcircle3.redraw();
+			elseif iResp == 4 then
+				opt_matcircle4.set_color(44,205,239,250);
+				opt_matcircle4.redraw();
+			elseif iResp == 5 then
+				opt_matcircle5.set_color(44,205,239,250);
+				opt_matcircle5.redraw();
+			elseif iResp == 6 then
+				opt_matcircle6.set_color(44,205,239,250);
+				opt_matcircle6.redraw();
+			elseif iResp == 7 then
+				opt_matcircle7.set_color(44,205,239,250);
+				opt_matcircle7.redraw();
+			elseif iResp == 8 then
+				opt_matcircle8.set_color(44,205,239,250);
+				opt_matcircle8.redraw();
+			end;
+			iButtonPressed = iButtonPressed+1;
+		end;	
+				
+		# Redraw with indice
+		trial_resp_off.present();
+		opt_matrices.present();
+		iStimOff= clock.time();
+		wait (999);
+		
+		# Make Grey Again
+		opt_matcircle1.set_color(226,224,227,0);
+		opt_matcircle1.redraw();
+		opt_matcircle2.set_color(226,224,227,0);
+		opt_matcircle2.redraw();
+		opt_matcircle3.set_color(226,224,227,0);
+		opt_matcircle3.redraw();
+		opt_matcircle4.set_color(226,224,227,0);
+		opt_matcircle4.redraw();
+		opt_matcircle5.set_color(226,224,227,0);
+		opt_matcircle5.redraw();
+		opt_matcircle6.set_color(226,224,227,0);
+		opt_matcircle6.redraw();
+		opt_matcircle7.set_color(226,224,227,0);
+		opt_matcircle7.redraw();
+		opt_matcircle8.set_color(226,224,227,0);
+		opt_matcircle8.redraw();
+		
+		# Present Fixation for 4 sec
+		fixationcross.present();
+		wait (4000);
+		WriteToOutputFile(sBehLog);
+		iRT= 0;
+		matrix_count=matrix_count+1;
+	end;
+	
+end;

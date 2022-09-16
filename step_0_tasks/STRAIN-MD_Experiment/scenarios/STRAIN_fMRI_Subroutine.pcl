@@ -1,0 +1,212 @@
+##################################################################################
+#																											#
+#								SETTINGS AND GENERAL SUBROUTINES									#
+#																											#
+#																											#
+# 	This will allow you to change some settings, and also includes standard 		#
+#							useful subroutines that might ocme in handy						#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 		Settings 													
+#--------------------------------------------------------------------------------#
+
+# Trials Per Run
+int trial_per_run = 126;
+int odd_n_trials = 84;
+int ret_n_trials = 21;
+int enc_n_trials = 63;
+int oddret_n_trials= 64;
+
+# Variables
+int StartAtTrigger=6;
+int triggered=1;
+int trialcount;
+
+##Eye Tracker
+#output_port oport = output_port_manager.get_port( 1 ); 		#This is eye-tracker / ECG output port
+#oport.set_pulse_width(100);	
+
+# Other
+int starttime;
+int stimduur = 6000;										
+int speedFactor=1; #If >1 = Hyper Speed
+
+
+#--------------------------------------------------------------------------------#
+# 		Trial Order Files 													
+#--------------------------------------------------------------------------------#
+
+## Set Trial Order for Indivdual Run from Text File
+string TotalTrialSet = "trial_order_" + "sub" + string(subjnr) + "_s" + string (session) + ".txt";	
+input_file trial_order_set = new input_file;
+
+## Empty Array for Text
+array <int> trial_order [trial_per_run];
+
+## Location of Order File
+trial_order_set.open("trials_order\\" + TotalTrialSet);								
+
+## Load information from stimulus txt file
+int order_counter = 1;								
+loop until																		
+   order_counter > trial_per_run 														
+begin
+	trial_order[order_counter] = trial_order_set.get_int();
+	order_counter = order_counter + 1;
+end;
+
+
+#--------------------------------------------------------------------------------#
+# 	Log File Routines												
+#--------------------------------------------------------------------------------#
+
+## Log Variables
+int iTrial;
+int iValence;
+string sStimPic;
+int iCorrectLocation;
+int iStimOn;int iStimOff;
+int iBlockOn;int iBlockOff;
+int iExperimentOn;int iExperimentOff;
+
+## Button Press Log	
+int resp;
+int RT; 
+int pressed; 
+
+## Strings for Log File Names
+string sMRILogFileDir = "Sub"+string(subjnr)+"_mri_s"+string(session)+"_r"+string(run)+".txt";
+string sENCLogFileDir = "Sub"+string(subjnr)+"_enc_s"+string(session)+"_r"+string(run)+".txt";
+string sODDRETLogFileDir = "Sub"+string(subjnr)+"_oddret_s"+string(session)+"_r"+string(run)+".txt";
+
+## Make Log File
+output_file OutputFile=new output_file;
+sub MakeOutputFile (string FileName) begin
+	OutputFile.open_append(FileName);
+	OutputFile.print("Trial_Type\tStim_Shown\tStim_Valence\tTrial_On\tTrial_Off\tReactionTime\tButton_Press\tCorrect_Resp\tBlock_On\tBlock_Off\tExperimentOn/Off\n");
+	OutputFile.close();
+end;
+
+## Writeout to Log Subroutine
+sub WriteToOutputFile(string sFileName)begin
+	OutputFile.open_append(sFileName);
+	OutputFile.print	(string(iTrial) + "\t" + sStimPic + "\t" + string(iValence) + "\t" + string(iStimOn) + "\t" + string(iStimOff) + "\t" 
+							+ string(RT) + "\t" + string(resp) + "\t" + string(iCorrectLocation) + "\t"
+							+ string(iBlockOn) + "\t" + string(iBlockOff) + "\t" + string(iExperimentOn) + "\t" + string(iExperimentOff) + "\n");
+	OutputFile.close();
+end;
+
+## Log Variable for Recall
+int iType;
+int iButtonPressed;
+int iResp;
+int iRT;
+
+## Make Logfile for Recall Subroutine
+output_file OutputFile2=new output_file;
+sub MakeOutputFile2 (string FileName) begin	
+	OutputFile2.open_append(FileName);
+	OutputFile2.print("StimPic\tiStimOn\tiStimOff\tLurOrTar\tButton_Pressed\tRT\n");
+	OutputFile2.close();
+end;
+
+## Writeout to Recall Log Subroutine
+sub WriteToOutputFile2(string sFileName)begin
+	OutputFile2.open_append(sFileName);
+	OutputFile2.print(sStimPic+"\t" + string(iStimOn)+ "\t" + string(iStimOff)+ "\t" + string(iType)+ "\t" + string(iResp)+ "\t" + string(iRT)+"\n");
+	OutputFile2.close();
+end;
+
+
+#---------------------------------------------------------------------------------
+# 		Timing Subroutines
+#---------------------------------------------------------------------------------
+
+## Waits until a given endtime
+sub waituntill ( int endtime ) begin
+   loop until clock.time() >= endtime
+   begin
+   end;
+end;
+
+## Waits a given time
+sub wait(int waittime) begin
+	loop int clocktime = clock.time();
+	until clock.time() - clocktime >= waittime
+	begin 
+	end;
+end;
+
+## Waits a given time (Rayyan Edition)
+sub Wait (int iDurWait) begin
+	loop int iTimeStamp = clock.time();
+	until clock.time() >= iTimeStamp + iDurWait
+	begin
+	end;
+end;
+
+
+#---------------------------------------------------------------------------------
+# 		Buttonpress Subroutines
+#---------------------------------------------------------------------------------
+
+## Wait for Any Button Press (Linda)
+sub waitforbuttonpress begin
+	loop	int Current_response_count = response_manager.total_response_count()
+	until		Current_response_count < response_manager.total_response_count()
+	begin																
+	end;									#Return the number of the button pressed
+end;
+
+
+## Wait for Any Buttonpress (Rayyan)
+sub WaitForAllButtonpress begin
+	loop int iKeyCount = response_manager.total_response_count()
+	until iKeyCount< response_manager.total_response_count()
+	begin
+	end;	
+end;
+
+## Wait for Specific Buttonpress
+sub WaitForSpecButtonpress (int k) begin
+	int RGButton = response_manager.total_response_count(k);
+	string sKeyboardInput;
+	loop sKeyboardInput until RGButton< response_manager.total_response_count(k)
+	begin
+	end;	
+end;
+
+## Wait for Any Buttonpress or Time
+sub WaitForButtonpressTime (int iDurWait) begin
+	int iTimeStamp = clock.time();
+	int RGButton = response_manager.total_response_count();
+	string sKeyboardInput;
+	loop sKeyboardInput until RGButton< response_manager.total_response_count() || clock.time()>=iTimeStamp + iDurWait
+	begin
+	end;		
+end;
+
+## Wait for Time or Specific Button Press
+sub WaitForTimeOrSpecificButton (int iDurWait, int WhichButton) begin
+	int iTimeStamp; int Button; string sKeyboardInput; #Variables
+	Button = response_manager.total_response_count(WhichButton);
+	iTimeStamp = clock.time();
+	loop sKeyboardInput until Button< response_manager.total_response_count(WhichButton) || clock.time()>=iTimeStamp + iDurWait
+	begin
+	end;		
+end;
+
+
+#---------------------------------------------------------------------------------
+#		Text Subroutines
+#---------------------------------------------------------------------------------
+
+## Puts Text on Screen
+sub showtext(string message) 
+begin	
+   tos1.set_caption( message );
+   tos1.redraw();
+   textonscreen.present();
+end;
+

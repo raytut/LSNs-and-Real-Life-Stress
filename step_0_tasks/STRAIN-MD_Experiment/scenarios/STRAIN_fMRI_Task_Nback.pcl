@@ -1,0 +1,103 @@
+##################################################################################
+#																											#
+#  										 NBACK TASK													#
+#																											#
+#																											#
+#																											#
+#	This task presents numbers 1 to 5 in a randomized fashion as a 2 NBACK Task	#
+#																											#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 		N-Back procedure: randomizes with excluding a specific number				
+#--------------------------------------------------------------------------------#
+
+# Randomization
+sub int random_exclude(int first, int last, int exclude)
+begin
+   int rval = random( first, last - 1 );
+   if (rval >= exclude) then
+		rval = rval + 1
+   end;
+   return rval
+end; 
+
+# Number Exclusion
+sub nback (int stimulus_count)
+begin
+	loop int stim_c=1;
+	int two_back = 0;																							#first 2 trials this is 0
+	int one_back = 0;																							#first trial this is 0
+	until stim_c>stimulus_count
+	begin
+		# Number to Be Presented
+		int index;
+		# Determine Number Value
+		if (two_back == 0) then 																			#1.>complete random number at first and second presentation
+			index = random (1, numbers.count());
+			iCorrectLocation = 0;
+		elseif (random( 1, 4 ) == 1) then																#2.>1 out of 4 times it is 2back (but random)
+			index = two_back;
+			iCorrectLocation = 1;
+		else																										#3.>random number that is NOT the 2back
+			index = random_exclude( 1, numbers.count(), two_back);
+			iCorrectLocation = 0;
+		end;
+		
+		# Put Number on Screen + Log
+		pic.set_part( 1, numbers[index] );
+		iStimOn = clock.time();
+		
+		#Send Eye tracker code + Present
+		oport.send_code(20);
+		nback.present();
+		
+		# Log Offset
+		iStimOff = clock.time();
+		
+		# Response
+		resp = 0; RT = 0; pressed = 0;	
+		loop until clock.time() >= (iStimOff+ (1790-(iStimOff-iStimOn))) 
+		begin
+			fixationdot.present(); 
+			if (response_manager.response_count() == 1) then
+				if pressed == 0 then	pressed = 1;
+					resp = response_manager.last_response();
+					RT = (response_manager.last_response_data().time()) - iStimOn;
+				end;
+			end;
+		end;
+		
+		# Log Number
+		sStimPic = string(index);
+		
+		# Prepare for Next Trial
+		two_back = one_back;#for last trial
+		one_back = index;#last trial
+		stim_c=stim_c+1;#trial counter
+		
+		# Writ to log
+		WriteToOutputFile (sMRILogFileDir);
+	end;
+end;
+
+
+#--------------------------------------------------------------------------------#
+# 											NBACK Subroutine 											
+#--------------------------------------------------------------------------------#
+
+sub nback_subroutine (int blcknum)
+begin
+	loop int blcknum_c=1 until blcknum_c>blcknum
+	begin
+		# Log
+		iBlockOn = clock.time();
+		iCorrectLocation = 0;		
+		# Run 2-back block
+		nback(15);
+		# Log
+		iBlockOff = clock.time();
+		# Update Counter
+		blcknum_c=blcknum_c+1;
+	end;
+end;		

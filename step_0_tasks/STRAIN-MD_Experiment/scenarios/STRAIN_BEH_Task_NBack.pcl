@@ -1,0 +1,98 @@
+##################################################################################
+#																											#
+#  										 NBACK TASK													#
+#																											#
+#																											#
+#																											#
+#	This task presents numbers 1 to 5 in a randomized fashion as a 2-back task		#
+#																											#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 		N-Back procedure: randomizes with excluding a specific number				
+#--------------------------------------------------------------------------------#
+
+# Randomization
+sub int random_exclude(int first, int last, int exclude)
+begin
+   int rval = random( first, last - 1 );
+   if (rval >= exclude) then
+      rval = rval + 1
+   end;
+   return rval
+end; 
+
+# Number Exclusion
+sub nback (int stimulus_count)
+begin
+	loop int stim_c=1;
+	int two_back = 0;																						# This starts of as 0
+	int one_back = 0;																						# This also starts of as 0
+	until stim_c>stimulus_count
+	begin
+		# Number to Be Presented
+		int index;
+		# Determine Number Value
+		if (two_back == 0) then 																		#1. Random number at first and second presentation. Marked as '4' in log; it's at start of each block (!).
+			index = random( 1, numbers.count() );
+			iStimType = 4;
+		elseif (random( 1, 4 ) == 1) then															#2. 1 out of 4 times (random), it will generate a 2-back. Marked as '2' in log.
+			index = two_back;																				#See below: "two_back" is the digit that was "one_back" on the previous trial, which was "index" on the trial before that
+			iStimType = 2;
+		else																									#3. 3 out of 4 times (random), it will generate a number that is NOT a 2-back. Marked as '0' in log. 
+			index = random_exclude( 1, numbers.count(), two_back );							#The digit that is "two_back" is excluded from the selections of digits that can be chosen randomly. 
+			iStimType = 0;
+		end;
+		
+		# Put Number on Screen + Log
+		pic.set_part( 1, numbers[index] );															# Presents the digit that is now "index". 
+		iStimOn = clock.time();
+		nback.present();
+		iStimOff = clock.time();
+		
+		# Response
+		iResp = 0; iRT = 0; pressed = 0;	
+		loop until clock.time() >= (iStimOff+ (1900-(iStimOff-iStimOn))) 
+		begin
+			fixationdot.present(); 
+			if (response_manager.response_count() == 1) then
+				if pressed == 0 then	pressed = 1;
+					iResp = response_manager.last_response();
+					iRT = (response_manager.last_response_data().time()) - iStimOn;
+				end;
+			end;
+		end;
+		
+		# Log Number
+		sStimPic = string(index);
+		
+		# Prepare for Next Trial
+		two_back = one_back;   																			# Last but one trial; the 2-back. This is the digit that was "one_back" on the previous trial.
+		one_back = index;																					# Very last trial. This is the digit that was presented [-> was the index] on the previous trial. 
+		stim_c=stim_c+1;																					# The trial counter.
+		WriteToOutputFile (sBehLog);
+	end;
+end;
+
+
+#--------------------------------------------------------------------------------#
+# 											NBACK Subroutine 											
+#--------------------------------------------------------------------------------#
+
+sub nback_subroutine (int blcknum)
+begin
+	loop int blcknum_c=1 until blcknum_c>blcknum
+	begin
+		# Log
+		iBlockOn = clock.time();
+		
+		# Run 2-back block
+		nback(25);
+		
+		# Log
+		iBlockOff = clock.time();
+		
+		# Update Counter
+		blcknum_c=blcknum_c+1;
+	end;
+end;		

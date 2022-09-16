@@ -1,0 +1,10 @@
+Scenario - BaLLS_BEH_Scenario_s1.sce
+Logfile written - 08/14/2018 17:47:51
+
+Subject	Trial	Event Type	Code	Time	TTime	Uncertainty	Duration	Uncertainty	ReqTime	ReqDur	Stim Type	Pair Index
+
+1	0	Response	1	29616	29616	0
+1	0	Response	2	40255	40255	0
+1	62	Response	2	116416884	113049134	0
+1	62	Response	3	116454240	113086490	0
+1	313	Quit		222225366	98874776	NA

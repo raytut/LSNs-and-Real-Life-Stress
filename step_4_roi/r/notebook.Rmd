@@ -1,0 +1,2007 @@
+---
+title: "Large Scale Network Balance Under Stress and Real-life Affective Stress Reactivity"
+author: "Rayyan Tutunji"
+date: "`r format(Sys.time(), '%d-%b-%Y')`"
+output:
+  html_notebook:
+    code_folding: hide
+    fig_height: 6
+    fig_width: 7
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: no
+editor_options:
+  chunk_output_type: inline
+---
+
+# Introduction {-}
+The following code is specific to the task related fMRI task analysis of the Stress Resilience and the Brain in Medical Students (STRAIN-MD) study. Details of the study can be found in an earlier [publication](https://www.biorxiv.org/content/10.1101/2021.06.29.450360v2). In short, the study consisted of a within subject design examining real-life stress exposure with **Ecological Momentary Assessments(EMA)** measures, and an fMRI stress exposure using the **Socially Evaluated Cold Pressor task(SECPT)**. The main aim of the study as whole is to link changes is large scale brain networks under stress to real-life stress and resilience measures. Details of the real-life stress procedure can be found in the previously mentioned publication. During the fMRI session, participants engaged in three tasks. The fMRI tasks are designed to activate specific parts of the brain. Primarily, the **Executive Control (ECN)**, **Default Mode (DMN)**, and **Salience (SN)** networks. The ECN task is a 2-Back where participants respond every time they see 2-Back number. The DMN task is an associative retrieval task. For this task, participants were shown images that moved to 1 of four corners of the screen outside the scanner. They were then asked to indicate where they saw the images using button presses in the scanner. The third and final task that targeted the SN was an emotional oddball. For this task, participants had to respond to a stream of faces whenever a novel face with an emotional expression was presented. In addition to the actual tasks and their contrasts, we also collect peripheral physiological data. This includes
+
+  - Heart Rate
+  - Skin Conductance
+  - Salivary Cortisol
+
+These measures were used to validate our laboratory stress induction procedure. In this notebook, we validate the stress induction procedures using the above heart rate and saliva data. We additionally derive a lab-based stress reactivity measure from the salivary cortisol response to stress during the SECPT. We also derive a measure from the real-life stress data that reflects stress reactivity/resilience in daily life. Both the lab stress measure, and the real-life stress measure can then be used in subsequent analysis of fMRI related activity and overall task performance in the corresponding sections below. In order to replicate these analyses, the below libraries are use, in addition to a file with custom functions supplied in the repository. 
+
+
+
+```{r message=FALSE, warning=FALSE, setup=TRUE}
+
+library(knitr)
+knitr::opts_chunk$set(include=TRUE, results='show', message=FALSE, warning=FALSE, comment=NA, echo=T, tidy=TRUE, concordance=TRUE, autodep=TRUE)
+options(knitr.table.format = "html", booktabs=TRUE) 
+
+#Cleaning Libs
+library(readxl)       # Read excel sheets
+library(tidyverse)  
+library(plyr)
+library(dplyr)
+library(broom)         # tidy functions
+library (hablar)
+library(janitor)
+library(data.table)
+library(zoo)
+
+# Basic Stats
+library (psych)       # Nice descriptives and scaling
+library (psycho)      # We use the dPrime Tool
+library(Hmisc)        # Girl I dont event know
+library(corrr)        # Correlation
+library(ppcor)        # Partial Correlation
+library(corrplot)     # Correlation matrix plotting
+#Linear Modeling
+library(lmerTest)     # Main Mixed Models
+library(afex)         # Advanced Options Mixed Models
+library(optimx)       # Optimizer for MMs
+library(jtools)       # Uses summ function for readable models
+library(performance)  # Model Diagnostics
+library(emmeans)      # used for follow-up tests on lmers
+#Plotting
+library(ggplot2)      # Standard plotting
+library(ggpubr)       # Arrange plots
+library(sjPlot)       # Plot regressions and lmer
+library(car)          # I use the qqPlot function here
+
+# Fonts and Asthetics
+library(stargazer)
+library(extrafont)
+library(kableExtra)
+
+# Functions and cores
+library(future)       # Parallel Processing
+library(foreach)      # Parallel for each functins
+library(parallel)
+library(doSNOW)       # do function over cores
+source("functions.R") # Custom Functions
+
+# Make sure lmer contrasts are set to sum 0
+options(contrasts=c("contr.sum", "contr.poly"))
+
+# Assign Cores for Parallel processing
+ncores <- as.numeric(availableCores())-1
+
+# Load fonts
+#font_import()
+loadfonts(device="pdf")
+
+# Themes used for ggplots
+ggtheme1 <- theme (text=element_text(size=16),
+                  legend.position = "none",
+                  axis.text.y = element_blank(),axis.text.x = element_text(size=16),
+                  axis.ticks.y = element_blank(),
+                  plot.title = element_text(size=16, hjust=0.5),
+                  panel.background = element_rect(fill="transparent"),
+                  panel.grid.minor.y = element_line(size=3),
+                  panel.grid.major = element_line(colour = "aliceblue"))
+ggtheme2 <- theme(text=element_text(size=11, family="ArialMT"),
+                  axis.line = element_line(size = 1, colour = "grey"),
+                  panel.background = element_rect(fill="transparent"),
+                  plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+                  panel.grid.minor = element_line(colour="grey95"),
+                  panel.grid.major = element_line(colour = "grey95")) 
+fmri_colors <- c("#00BFC4", "#7CAE00", "#F8766D", "#00B8E7", "#0CB702", "#E68613" ) # DMN, ECN, SN, Early then Late
+stress_colors <-  c("#00BFC4",  "#F8766D", "#7CAE00","#00B8E7", "#E68613")               
+```
+
+# Real-life Stress
+We first start with the stress induction in real life, since to some extent this is a replication of previously done analyses. Here, we used an exam and control week as stressor to see its impact on mood an physiology. This was done prior to any scanning, and you can find out more details in the [publication](https://www.biorxiv.org/content/10.1101/2021.06.29.450360v2). In short, we found that our stress weeks result in increased subjective stress, and that affect and physiology both change in relation to stress exposure, and subjective stress reports. Our primary goal for the sake of the current project is to derive a measure of stress reactivity in real life that we can use as a fixed effect in our fMRI analyses. We should be able to use this measure to link effects of real life to the lab, to fMRI task performance, or to fMRI task related activity and most importantly large scale network balance. 
+
+To this end, we do an interpretation of the residual based regressor, with subjective stress as our exposure measures, and positive affect as our resilience component. This is based on a few different studies (Rafael Kalisch's work, and some from Sanne Boij). We contemplated using something like emotional inertia and the instability, but these measures are only useful for between subject designs, rather than within. 
+
+## Data
+We load in the file that we derive in our paper mentioned above. This consists of processed EMA items for subject stress during a week with an exam and another week without an exam (IE. Stress and Control weeks respectively). All data cleaning has already been performed, so we need minimal processing at this stage. The full details of the processing pipeline that was used to generate this data can be found in our previous study, with the associated notebook made available on [GitHub](https://raytut.github.io/DetectingStress/). All we need to do is load the data, and do some simple retyping.
+```{r warning=FALSE}
+# Import Data = Retype
+df_EMA <- read.csv2("data/EMA_Clean_Anon.csv", sep = ",")
+df_EMA <- df_EMA %>% retype() #%>% print()
+df_EMA$week_type <- df_EMA$week_type
+df_EMA$Week_Type <- factor(df_EMA$week_type, levels=c(0,1), labels=c("Control", "Stress"))
+```
+We also want to dichtomoize our subjective stress levels. We do this by assessing the overall subjective stress, and determining subject-level means. If the stress is higher that the mean, then we get a stress situation. If it is lower, then we get a no stress situation.
+```{r}
+df_EMA <- df_EMA %>% dplyr::group_by(castor_record_id) %>% dplyr::mutate(ss_tot=(event_tot+activity_tot+social_tot), ss_tot_c=scale(ss_tot,center=TRUE), 
+                                                ss_tot_m=mean(ss_tot_c, na.rm=TRUE), ss_tot_bin=factor(ifelse(ss_tot_c>ss_tot_m, "Stress", "Non-Stress")) ) %>% ungroup() 
+df_EMA$mean_stress_z <- scale(df_EMA$mean_stress, center=TRUE, scale=T)
+
+```
+We additionally want to come up with a measure from these EMA weeks that can be related to neuroticism or depressive personality to make sure that whatever measure we derive is actually valid and related to an already established measure of stress sensitivity.
+```{r}
+df_psych <- read.csv2("/project/3013068.02/stats/EMA/Questionnaires.csv", sep=",") %>% dplyr::rename(sub_id=castor_record_id)
+```
+
+## Statistics
+
+### Primary Models: Daily life differences {-}
+We first need to get the main models where we look at the differences in subjective stress (SS) and positive affect (PA) between the control and stress weeks. We use mixed effects models, with random slopes and intercepts for each subject. This allows us to actually get subject level fixed effects for the week type. Its similar to doing individual regressions for each subject to get the Betas for each one. These Betas are used in the next stage. Note that the results of these model are counter intuitive because the subject level fixed effects we for week type is set as Control-Stress. We therefore need to reverse the signs of the fixed effects in order to actually get the results we want (Stress-Control).
+
+<br>
+
+
+#### Subjective Stress {- .tabset}
+
+##### Model {-}
+```{r}
+contrasts(df_EMA$Week_Type) <- contr.treatment(c("Control", "Stress"))
+model.stressBIN_week <- glmer(ss_tot_bin ~ Week_Type + (1+Week_Type|castor_record_id), contrasts=list(Week_Type="contr.treatment"),
+                              data=df_EMA, family=binomial(), control=glmerControl(calc.derivs=FALSE))
+asis_output(tab_model(model.stressBIN_week, show.stat=TRUE, show.se=TRUE)$knitr)
+```
+
+<br>
+
+##### Plot {-}
+```{r}
+
+df_EMA.ss_sum <- df_EMA %>% dplyr::group_by(castor_record_id, week_type, ss_tot_bin) %>% filter(ss_tot_bin=="Stress") %>% dplyr::summarise(ss_tot_bin=length(ss_tot_bin))
+
+plot.stress_week <- ggplot(df_EMA.ss_sum, aes(x=week_type, y=ss_tot_bin, color=castor_record_id)) + 
+           geom_line(alpha=0.15, stat="summary") + 
+            geom_smooth(aes(color=NA), method="lm", alpha=1, size=1, se=F)+
+           scale_x_continuous(breaks=c(0,1),labels = c("Control\nWeek","Stress\nWeek"))+
+           ylab("Number of beeps with stress") +
+           ggtheme2 +
+           theme(legend.position = "none", 
+                 axis.title.x=element_blank(), axis.text.x=element_text(size=10, colour="black"),
+                 axis.title.y=element_text(size=10), axis.text.y=element_text(size=8, colour="black" ))
+plot.stress_week
+```
+
+<br>
+
+#### Positive Affect {- .tabset}
+
+##### Model {-}
+```{r}
+model.pos_week <- lmer(mood_positive_cs ~ Week_Type + (1 + Week_Type|castor_record_id),
+                       data=df_EMA, 
+                       control=lmerControl(calc.derivs =F),
+                       contrasts=list(Week_Type=contr.treatment(2)) )
+asis_output(tab_model(model.pos_week, show.stat=TRUE, show.se=TRUE)$knitr)
+```
+
+##### Plot {-}
+```{r}
+plot.pa_week <- ggplot(df_EMA, aes(x=week_type, y=mood_positive_cs, color=castor_record_id)) + 
+            geom_line(alpha=0.15, stat="summary") + 
+           geom_smooth(aes(color=NA), method="lm", alpha=1, size=1, se=F)+
+           scale_x_continuous(breaks=c(0,1),labels = c("Control\nWeek","Stress\nWeek"))+
+           ylab("Average positive affect (a.u.)") +
+           ggtheme2 +
+           theme(legend.position = "none", 
+                 axis.title.x=element_blank(), axis.text.x=element_text(size=10, colour="black"),
+                 axis.title.y=element_text(size=10), axis.text.y=element_text(size=8, colour="black" ))
+plot.pa_week
+```
+
+
+### Reisdual Resilience Score {- .tabset}
+We now extract the fixed and random effects of each of our models, so that we can use them in a single linear model. We first do this for SS, and then PA. Finally we combine them into a single data frame that we can use for the analysis. We do this by extracting the fixed effects estimates from the main models of subjective stress and positive affect for the random effect of subject.
+```{r}
+# Subjective stress
+fixed_stress2 <- coef(model.stressBIN_week)$castor_record_id
+fixed_stress2$id <- rownames(fixed_stress2)
+random_stress2 <- ranef(model.stressBIN_week)$castor_record_id
+# Positive affect
+fixed_pos <- (coef(model.pos_week)$castor_record_id)
+fixed_pos$id <- rownames(fixed_pos)
+random_pos <- ranef(model.pos_week)$castor_record_id
+
+```
+
+We finally combine them into a single data frame that we will use in the secondary model
+```{r}
+df_stressrx <- merge(fixed_stress2, fixed_pos, by="id", suffixes=c("_stress","_pa"))
+names(df_stressrx) <- c("id","stress_int","stress_fe",  "pa_fe", "pa_int", "pa_mean")
+```
+
+#### Model {-}
+We now go to our second level models. Here, we model the effect of changes in subjective stress reports on changes in mood between the two weeks. We see a significant relationship between the two. The more stress you experience, the lower your positive affect gets relative to baseline.  We extract from the model of change in affect as a function of change in subjective stress reports the fitted values, residuals, predicted value, and plot them. From the residuals, we see that those above the line are people who experience less change in affect in response to stress, and those below experience more reductions in positive affect in response to stress. So those with negative residuals would be stress sensitive, and those without would be resilient. 
+```{r}
+model.residual_regressorsBIN <- lm(pa_fe ~ stress_fe, data=df_stressrx)
+asis_output(tab_model(model.residual_regressorsBIN, show.stat=TRUE, show.se=TRUE)$knitr)
+
+# Binarized Model
+df_stressrx$fitsBIN <- model.residual_regressorsBIN$fitted.values
+df_stressrx$resBIN <- model.residual_regressorsBIN$res
+df_stressrx$effBIN <-model.residual_regressorsBIN$effects
+df_stressrx$predBIN <- predict(model.residual_regressorsBIN)
+```
+
+
+#### Plot {-}
+```{r}
+plot.residual <- ggplot(df_stressrx, aes(x=stress_fe, y=pa_fe)) + 
+    geom_smooth(method="lm", se=F, colour="grey")+                          # Plot linear relationship
+    geom_point(aes(y=fitsBIN), shape=1, size=0.2)+                          # Fits dots on the line
+    geom_segment(aes(xend=stress_fe, yend = fitsBIN), alpha = .2) +      # Fits the lines betweem the fitted values on the line, and residuals
+    geom_point(aes(color=resBIN)) +                                         # Draw residual dots + colour them
+    scale_color_gradient2(low = "red", mid = "ghostwhite", high = "blue")+  # Scale the colour
+    xlab("FE Stress") + ylab("FE Positive Affect") +
+    ggtheme2 +
+    theme(legend.position = "none", axis.title.x=element_text(size=12), axis.title.y=element_text(size=12),axis.line.x=)
+plot.residual
+```
+
+### Full Plot {-}
+```{r}
+ggarrange(
+          ggarrange(NULL,plot.stress_week,  NULL, plot.pa_week, ncol=2, nrow=2, widths=c(0.05,1,1), labels=c("A","", "B")), 
+          NULL, 
+          plot.residual, widths=c(1,0.05,1.2), 
+          ncol=3, labels=c("","C", "")); ggsave("figures/Figure_2_EMA.svg", device="svg", dpi=300, bg="white")
+```
+
+### Correlation with Psych {-}
+Finally we check the correlation between our subjective stress measure, and our personality traits. This allows us to validate that our stress resilience score is related to previously linked scores from the literature. To do this, we merge the psych data frame containing the questionnaires that participants filled in, with the residual data frame, and do some magic to put all the data together. We then plot a correlation matrix. Our scores are linked to neuroticism, which is great! 
+```{r}
+df_psych.sub <- df_psych %>% dplyr::rename(id=sub_id) %>% dplyr::select(id, ("neo_o"), contains("neo_c"), contains("neo_e"), contains("neo_a"), contains("neo_n"), contains("bdi_total"), "trait_total")
+df_stress.sub <- df_stressrx %>% dplyr::select(id, contains("fe"), starts_with("res") )
+df_stress.psych <- merge(df_stress.sub, df_psych.sub, by="id")%>% retype()
+names(df_stress.psych) <-c("id", "PA", "SS_BIN", "Res_BIN", "NEO_O", "NEO_C", "NEO_E", "NEO_A", "NEO_N", "BDI", "STAI_T")
+df_stress.psych.cor <- df_stress.psych[c(2:11)]
+df_stress.psych.cor <- data.frame(lapply(df_stress.psych.cor, function(x) scale(x, center = TRUE, scale=T)))
+```
+
+```{r}
+cormat.str <- rcorr(as.matrix(df_stress.psych.cor))
+corrplot(cormat.str$r, method="number", p.mat=cormat.str$P, type="lower", diag=FALSE, insig="pch", cl.pos="n")
+```
+```{r}
+asis_output(tab_model(lm(Res_BIN ~ 1 + NEO_N, data=df_stress.psych ))$knitr)
+ggplot(df_stress.psych, aes(y=NEO_N, x=Res_BIN)) + geom_smooth(method="lm") + ggtheme2
+```
+
+
+
+# Laboratory Stress Induction
+Before we do any analysis regarding the effects of stress on the brain and our tasks, we need to validate our stress induction procedure. Since this is a within subject design, all participants underwent both the stress induction procedure, and a matched control procedure. The stress procedure involved a novel experimenter placing the participants foot in ice water of 3 minutes, followed by a difficult mental arithmetic task for another 3 minutes. The control procedure was performed by a familiar experimenter, with room temperature water, and an easy arithmetic task. To validate the procedure, we first analyze our collected physiology data which includes saliva and heart rate measures. We also collect skin conductance data, but that still needs to be done, and is outside the scope of the current paper. 
+
+## Data
+The saliva measures are derived from samples collected during the scanning at 0 min, 6 min, 30 min, 50 min, and 120 min (approximately) from stress induction/control procedure. Additional samples are collected in the stress/control weeks at home. These samples are analysed offsite and returned in an excel sheet, with the timing logs being recorded in Castor during the scanning. The heart rate measures are also collected during this time via Brainamp with a pulse oxymeter. These measures were cleaned in matlab using [HeRa](https://github.com/can-lab/hera), and then compiled using a custom script. We first do some simple cleaning procedures to make analysis easier for each of the measures. 
+
+### Saliva {-}
+Salivary cortisol and amylase is collected several times in our study. Twice during an exam week, and a control week (non-exam), in addition to the 5 saliva samples during each of the MRI sessions (stress and control). A spreadsheet with the values of the saliva assays was sent from the offsite analysis site. We also record logs for the time at which each sample was acquired. Since this is our main stress validation measure, we need to make sure to get the files clean first. We therefore import the logs containing timing information for our samples to preprocess them and add them to the results from the saliva assays. A few things are done here, including subsetting the data frames, and calculating the relative time of each samples using the first sample as the starting time. We can then import the actual results from the salivary assays. One participant had an incorrect time stamp, so we also correct it here (it had the wrong hour value).
+
+```{r message=FALSE, warning=FALSE}
+# Get castor df
+df_castor <- read_excel("data/castor_data_export.xlsx",sheet = "Study results")
+
+# Get demographics DF
+df_demographics <- read_delim("data/demo_anon.csv", delim="\t") %>% clean_names() %>% dplyr::rename(subject_number="subject_id") %>%
+  dplyr::filter(!is.na(contraceptive_use)) %>% 
+  dplyr::mutate(sex=ifelse(contraceptive_use=="Male", "Male", "Female"),
+                contraceptive_use=ifelse(contraceptive_use=="c", NA, contraceptive_use)) 
+                                                   
+# Clean Subject numbers
+df_castor <- df_castor %>% separate("Record Id", c("subject_number", "dbl_sess"), "_s")
+df_castor$dbl_sess[is.na(df_castor$dbl_sess)]  <- 1
+df_castor <- subset(df_castor, df_castor$dbl_sess != 2) 
+
+# Subset df
+df_castor <- subset(df_castor, select=c("subject_number", "mri_data_control", "mri_data_control_1",
+                                                  "cort_1", "cort_2", "cort_3", "cort_4", "cort_5", 
+                                                   "cort_1_1", "cort_2_1", "cort_3_1", "cort_4_1", "cort_5_1"))
+df_castor[df_castor < 0] <- NA
+df_castor <- df_castor[df_castor$mri_data_control!="01-01-2999",] 
+df_castor <- unique(df_castor)
+
+# Format dates
+df_castor$mri_date_control <- as.Date(df_castor$mri_data_control, format="%d-%m-%Y")
+df_castor$mri_date_stress <- as.Date(df_castor$mri_data_control_1, format="%d-%m-%Y")
+
+# Calculate which is first scan
+df_castor$first_scan_diff <- NULL
+df_castor$first_scan_diff <- df_castor$mri_date_control - df_castor$mri_date_stress
+df_castor$first_scan_diff <- as.numeric(df_castor$first_scan_diff, units="days")
+
+# Depednding on difference betweem dates, set first scan
+df_castor$first_scan <- "Control"
+df_castor$first_scan[df_castor$first_scan_diff > 0] <- "Stress"
+
+# Calcualte time from first sample
+df_castor$t_1_c <- as.numeric(difftime(as.ITime(df_castor$cort_1), as.ITime(df_castor$cort_1), units='min'))
+df_castor$t_2_c <- as.numeric(difftime(as.ITime(df_castor$cort_2), as.ITime(df_castor$cort_1), units='min'))
+df_castor$t_3_c <- as.numeric(difftime(as.ITime(df_castor$cort_3), as.ITime(df_castor$cort_1), units='min')) 
+df_castor$t_4_c <- as.numeric(difftime(as.ITime(df_castor$cort_4), as.ITime(df_castor$cort_1), units='min')) 
+df_castor$t_5_c <- as.numeric(difftime(as.ITime(df_castor$cort_5), as.ITime(df_castor$cort_1), units='min')) 
+# Stress 
+df_castor$t_1_s <- as.numeric(difftime(as.ITime(df_castor$cort_1_1), as.ITime(df_castor$cort_1_1 ), units='min')) 
+df_castor$t_2_s <- as.numeric(difftime(as.ITime(df_castor$cort_2_1), as.ITime(df_castor$cort_1_1 ), units='min')) 
+df_castor$t_3_s <- as.numeric(difftime(as.ITime(df_castor$cort_3_1), as.ITime(df_castor$cort_1_1 ), units='min'))
+df_castor$t_4_s <- as.numeric(difftime(as.ITime(df_castor$cort_4_1), as.ITime(df_castor$cort_1_1 ), units='min')) 
+df_castor$t_5_s <- as.numeric(difftime(as.ITime(df_castor$cort_5_1), as.ITime(df_castor$cort_1_1 ), units='min')) 
+
+# Make long
+df_castor.long <- pivot_longer(df_castor, cols=t_1_c:t_5_s, names_to=c("sample_number"), values_to="time")
+# Rename Sample Number
+## Control Samples
+df_castor.long$sample_number[df_castor.long$sample_number=="t_1_c"] <- "_CMR_1"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_2_c"] <- "_CMR_2"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_3_c"] <- "_CMR_3"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_4_c"] <- "_CMR_4"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_5_c"] <- "_CMR_5"
+## Stress samples
+df_castor.long$sample_number[df_castor.long$sample_number=="t_1_s"] <- "_SMR_1"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_2_s"] <- "_SMR_2"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_3_s"] <- "_SMR_3"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_4_s"] <- "_SMR_4"
+df_castor.long$sample_number[df_castor.long$sample_number=="t_5_s"] <- "_SMR_5"
+
+
+
+# Get saliva results + clean up
+df_saliva <- read_excel ("data/BaLLS_CortisolSamples_Master.xlsx", sheet="mastersheet")
+df_saliva <- df_saliva %>% retype() %>% clean_names()
+df_saliva$subject_number <- tolower(df_saliva$subject_number)
+df_saliva <- merge(df_saliva, df_demographics, by="subject_number")
+
+# Merge with castor df
+df_saliva <- merge(df_saliva, df_castor.long, by=c("subject_number","sample_number"), all=T)
+df_saliva <- rename_(df_saliva, "first_scan"="first_scan.y")
+#Variable for Scan Type
+df_saliva <- df_saliva %>% dplyr::mutate(scan_type=ifelse(str_detect(sample_number, "CMR"), "Control", NA), scan_type=ifelse(str_detect(sample_number, "SMR"), "Stress", scan_type))
+
+# Correct the wrong time
+df_saliva$cort_3_1[df_saliva$cort_3_1=="12:25" & df_saliva$subject_number=="sub_023"] <- "13:25"
+``` 
+
+
+We next calculate the responses of interest from the cortisol data. These will be single values of responsivity that we can use in follow-up models and include the AUC and Henckens response. For the AUCg and AUCi, we follow the formula derived from [Pruessner et al. (2003)](https://www.sciencedirect.com/science/article/pii/S0306453002001087?via%3Dihub). We then measure the differences in both the AUCi and the AUCg in the stress and control sessions. For the HPA response from Henckens et al., we instead calculate the difference between the two peak measures in salivary cortisol. The expected peak in our study is sample 3, so we look at the difference in sample 3 in the stress vs control sessions, while correcting for baseline acquired at home. This baseline correction is superior because it is independent of order effects, and scanner apprehension. 
+```{r message=FALSE, warning=FALSE}
+# Make a wide df
+df_saliva.wide <- df_saliva %>% dplyr::select(subject_number,  first_scan, sample_number, cortisol, alpha_amylase, time) %>% 
+  pivot_wider(id_cols=c(subject_number), names_from=sample_number, values_from=c(cortisol, alpha_amylase, time), names_sep="", values_fn=list(cortisol=mean, alpha_amylase=mean, time=mean)) 
+
+# Get the AUCg 
+## AUCg Control
+df_saliva.wide$AUCg_control <- (
+    (((df_saliva.wide$cortisol_CMR_1+df_saliva.wide$cortisol_CMR_2)/2)*(df_saliva.wide$time_CMR_2)) +
+(((df_saliva.wide$cortisol_CMR_2+df_saliva.wide$cortisol_CMR_3)/2)*(df_saliva.wide$time_CMR_3-df_saliva.wide$time_CMR_2)) +
+(((df_saliva.wide$cortisol_CMR_3+df_saliva.wide$cortisol_CMR_4)/2)*(df_saliva.wide$time_CMR_4-df_saliva.wide$time_CMR_3))
+)
+## AUCg Stress
+df_saliva.wide$AUCg_stress <- (
+    (((df_saliva.wide$cortisol_SMR_1+df_saliva.wide$cortisol_SMR_2)/2)*(df_saliva.wide$time_SMR_2)) +
+(((df_saliva.wide$cortisol_SMR_2+df_saliva.wide$cortisol_SMR_3)/2)*(df_saliva.wide$time_SMR_3-df_saliva.wide$time_SMR_2)) +
+(((df_saliva.wide$cortisol_SMR_3+df_saliva.wide$cortisol_SMR_4)/2)*(df_saliva.wide$time_SMR_4-df_saliva.wide$time_SMR_3)))
+
+# Now get AUCi
+## AUCi Control
+df_saliva.wide$AUCi_control <- df_saliva.wide$AUCg_control - (df_saliva.wide$cortisol_CMR_1* ((df_saliva.wide$time_CMR_2)+(df_saliva.wide$time_CMR_3-df_saliva.wide$time_CMR_2)+(df_saliva.wide$time_CMR_4-df_saliva.wide$time_CMR_3))) 
+## AUCi Stress
+df_saliva.wide$AUCi_stress <- df_saliva.wide$AUCg_stress - (df_saliva.wide$cortisol_SMR_1* ((df_saliva.wide$time_SMR_2)+(df_saliva.wide$time_SMR_3-df_saliva.wide$time_SMR_2)+(df_saliva.wide$time_SMR_4-df_saliva.wide$time_SMR_3))) 
+
+## AUC Differences
+df_saliva.wide$AUCg_difference <- df_saliva.wide$AUCg_stress - df_saliva.wide$AUCg_control
+df_saliva.wide$AUCi_difference <- df_saliva.wide$AUCi_stress - df_saliva.wide$AUCi_control
+
+# Henckens
+df_saliva.wide$HPA_act <- (df_saliva.wide$cortisol_SMR_3 - df_saliva.wide$cortisol_CMR_1)/(rowMeans(cbind(df_saliva.wide$cortisol_CW_1, df_saliva.wide$cortisol_CW_2, df_saliva.wide$cortisol_SW_1, df_saliva.wide$cortisol_SW_2), na.rm=TRUE))
+```
+
+In order to plot the results, we also derive the mean times at which the samples we acquired. Finally we can also clean up some factors and other related items in the data frame to make analysis easier. Also filter out the non-scan related saliva samples because these are not really of interest here. 
+```{r}
+#Time Points for Scan Samples
+df_saliva$time_point[df_saliva$sample_number=="_CMR_1"|df_saliva$sample_number=="_SMR_1"]<- mean((df_saliva.wide$time_CMR_1+df_saliva.wide$time_SMR_1)/2, na.rm=TRUE)
+df_saliva$time_point[df_saliva$sample_number=="_CMR_2"|df_saliva$sample_number=="_SMR_2"]<-mean((df_saliva.wide$time_CMR_2+df_saliva.wide$time_SMR_2)/2, na.rm=TRUE)
+df_saliva$time_point[df_saliva$sample_number=="_CMR_3"|df_saliva$sample_number=="_SMR_3"]<-mean((df_saliva.wide$time_CMR_3+df_saliva.wide$time_SMR_3)/2, na.rm=TRUE)
+df_saliva$time_point[df_saliva$sample_number=="_CMR_4"|df_saliva$sample_number=="_SMR_4"]<-mean((df_saliva.wide$time_CMR_4+df_saliva.wide$time_SMR_4)/2, na.rm=TRUE)
+df_saliva$time_point[df_saliva$sample_number=="_CMR_5"|df_saliva$sample_number=="_SMR_5"]<-mean((df_saliva.wide$time_CMR_5+df_saliva.wide$time_SMR_5)/2, na.rm=TRUE)
+# Make into wide
+df_saliva.wide_sub <- df_saliva.wide %>% dplyr::select(subject_number, AUCg_control:HPA_act) 
+
+# Add to the main df
+df_saliva <- merge(df_saliva, df_saliva.wide_sub, by="subject_number") 
+
+# Factor variables and filter non needed data
+df_saliva$scan_type <- factor(df_saliva$scan_type,levels=c("Control","Stress"), labels=c("Control", "Stress"))
+df_saliva.scan <- df_saliva %>% filter(!is.na(first_scan))
+```
+
+### Heart Rate {-}
+Heart rate measures were collected using a Brainamp based system. We  load in the heart rate data, and start by cleaning it up. The actual denoising and artifact removal is done in Matlab using HeRa (mentioned above). For this analysis, we simply import the collected results from this program, and then proceed with a few simple cleaning steps. First we import the data. Then we clean. Certain subjects have issues with the naming of their fMRI EEG recordings of HR data (for example, due to stopping the scan and restarting, or a program crash). So we need to do some cleaning for the names and sessions for each of these subjects individually. This is done below. Its a little rudimentary but this was coded in the first days of using R and its too cumbersome to edit now. Basically, if it ain't broke, don't fix it. Finally, we re-order our session indicators, and double check to make sure they all have factors that let us plot and analyse the data effectively.
+```{r}
+# Load data
+df_HR <- read.csv("data/fmri_HR_clean.csv")
+# Drop duplicates
+df_HR<-df_HR[!duplicated(df_HR$File_Name),]
+
+#Sub 10:
+df_HR$Run[df_HR$SUB_NR == 10 & df_HR$Run == 5] <- 4
+df_HR$Run[df_HR$SUB_NR == 10 & df_HR$Run == 0] <- 5
+df_HR$Run_time[df_HR$SUB_NR == 10 & df_HR$Run == 4] <- 29
+df_HR$Run_time[df_HR$SUB_NR == 10 & df_HR$Run == 5] <- 45
+
+# Sub 52 s1_r1 errors:
+df_HR<-df_HR[!(df_HR$SUB_NR==52 & df_HR$Run==1 & df_HR$Session==2),]
+df_HR$Run[df_HR$SUB_NR == 52 & df_HR$Run == 2 & df_HR$Session==2] <- 1
+df_HR$Run[df_HR$SUB_NR == 52 & df_HR$Run == 3 & df_HR$Session==2] <- 2
+df_HR$Run[df_HR$SUB_NR == 52 & df_HR$Run == 4 & df_HR$Session==2] <- 3
+df_HR$Run[df_HR$SUB_NR == 52 & df_HR$Run == 5 & df_HR$Session==2] <- 4
+df_HR$Run[df_HR$SUB_NR == 52 & df_HR$Run == 0 & df_HR$Session==2] <- 5
+
+# SUB67  Session 2
+df_HR$Run[df_HR$File_Name=="sub67_s2_r1-2_fMRI_run_1_TR1500ms_189vols_-10-294s_hera.mat"] <- 2
+df_HR$Run[df_HR$File_Name=="sub67_s2_r1-2_fMRI_run_2_TR1500ms_475vols_629-1361s_hera.mat"] <- 3
+df_HR$Run[df_HR$File_Name=="sub67_s2_r1-2_fMRI_run_3_TR1500ms_200vols_1380-1700s_hera.mat"] <- 4
+df_HR$Run[df_HR$File_Name=="sub67_s2_r1-2_fMRI_run_4_TR1500ms_475vols_1730-2462s_hera.mat"] <- 5
+
+# SUB 71 Session 1
+df_HR$Run[df_HR$File_Name=="sub_71_s1_r2_fMRI_run_1_TR1500ms_475vols_161-893s_hera.mat"] <- 6
+df_HR$Run[df_HR$File_Name=="sub_71_s1_r2_fMRI_run_2_TR1500ms_200vols_915-1235s_hera.mat"] <- 7
+df_HR$Run[df_HR$File_Name=="sub_71_s1_r2_fMRI_run_3_TR1500ms_475vols_1267-1999s_hera.mat"] <- 8
+df_HR$Run[df_HR$File_Name=="sub_71_s1_r2_fMRI_run_4_TR1500ms_200vols_2019-2339s_hera.mat"] <- 9
+df_HR$Run[df_HR$File_Name=="sub_71_s1_r2_fMRI_run_5_TR1500ms_475vols_2371-3103s_hera.mat"] <- 10
+df_HR$Session[df_HR$Session==0 & df_HR$SUB_NR==71] <- 2
+
+# SUB 72 Session 1
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r1_fMRI_run_2_TR1500ms_200vols_2900-3220s_hera.mat"]=2
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r1_fMRI_run_3_TR1500ms_475vols_3615-4348s_hera.mat"]=3
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r1_fMRI_run_4_TR1500ms_200vols_4396-4716s_hera.mat"]=4
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r1_fMRI_run_5_TR1500ms_475vols_4764-5497s_hera.mat"]=5
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r2_fMRI_run_1_TR1500ms_475vols_176-908s_hera.mat"]=6
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r2_fMRI_run_2_TR1500ms_200vols_944-1264s_hera.mat"] =7
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r2_fMRI_run_3_TR1500ms_475vols_1289-2021s_hera.mat"]=8
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r2_fMRI_run_4_TR1500ms_200vols_2049-2369s_hera.mat"]=9
+df_HR$Run[df_HR$File_Name=="sub_72_s1_r2_fMRI_run_5_TR1500ms_475vols_2409-3142s_hera.mat"]=10
+df_HR$Session[df_HR$Run>0 & df_HR$SUB_NR==72] <- 1
+# SUB 72 Session 2
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r1_fMRI_run_1_TR1500ms_475vols_1005-1737s_hera.mat"]=1
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r1_fMRI_run_2_TR1500ms_200vols_1768-2088s_hera.mat"]=2
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r1_fMRI_run_3_TR1500ms_475vols_2421-3154s_hera.mat"]=3
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r1_fMRI_run_4_TR1500ms_200vols_3171-3491s_hera.mat"]=4
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r1_fMRI_run_5_TR1500ms_475vols_3505-4238s_hera.mat"]=5
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r2_fMRI_run_1_TR1500ms_475vols_374-1106s_hera.mat"]=6
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r2_fMRI_run_2_TR1500ms_200vols_1133-1453s_hera.mat"]=7
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r2_fMRI_run_3_TR1500ms_475vols_1526-2258s_hera.mat"]=8
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r2_fMRI_run_4_TR1500ms_200vols_2337-2657s_hera.mat"]=9
+df_HR$Run[df_HR$File_Name=="sub_72_s2_r2_fMRI_run_5_TR1500ms_475vols_2686-3418s_hera.mat"]=10
+df_HR$Session[df_HR$Session==0 & df_HR$SUB_NR==72] <- 2
+
+# Now remove anything extra that wasnt cleaned up:
+df_HR$Run[df_HR$Run==0] <- NA
+
+# Factor to indicate late and early
+df_HR$time_point <- 1 
+df_HR$time_point[df_HR$Run > 5] <- 2
+df_HR$time_point <- factor(df_HR$time_point, levels=c('1','2'),   labels=c('Early','Late'))
+
+# Factir fir variable for stress and control
+df_HR$Session <- factor(df_HR$Session, levels=c('1','2'), labels=c('Control','Stress'))
+
+# Lets also add the first scan coloumn from castor:
+df_HR_First <- df_castor
+df_HR_First <- separate(df_HR_First, subject_number, c("lead_val", "SUB_NR"), sep="_")
+df_HR_First$SUB_NR <- as.integer(df_HR_First$SUB_NR)
+df_HR <- merge(df_HR, df_HR_First, by="SUB_NR", all=T)
+df_HR$first_scan <- paste(df_HR$first_scan, "First", sep="-")
+df_HR <- dplyr::filter(df_HR, !is.na(first_scan))
+
+#Make Separate df for early and late
+df_HR_Early <- subset(df_HR, time_point=='Early')
+df_HR_Late <- subset(df_HR, time_point=='Late')
+df_HR_Early$Run_time[df_HR_Early$Run_time==1] <- 6
+
+# Clean names
+df_HR <- df_HR %>% clean_names() %>% filter(first_scan!="NA-First")
+df_HR$subject_number <- paste("sub", str_pad(df_HR$sub_nr, 3, pad = "0"), sep="_")
+df_HR <- merge(df_HR, df_demographics, by="subject_number") %>% dplyr::rename(first_scan="first_scan.x")
+```
+
+
+## Statistics
+Now that we have cleaned up our physiology data, we can start with the actual statistics of interest. The goal here is to establish increased physiological arousal/stress in the stress session relative to the control. We first take a look at relevant saliva measures (i.e., cortisol and alpha amylase), and then the heart rate measures (using IBI and RMSSD).  
+
+### Cortisol {- .tabset}
+We first check the data distribution, which looks like it needs a log transformation. We then run a model, with the addition of time, and controlling for scan order effects. We see in our main model that there is a significant stress*time effect on cortisol. We run a follow-up on the initial model to check the individual time effects. We see that that during the early stress phase, there is a significant increase increase in cortisol levels. We see that there is a significant difference in cortisol between the stress and control sessions, and at specific points in the follow up. 
+
+Since we want to use a single metric in the fMRI analysis for the response as a modulator, we check the area under the curve (AUC) between the two time points. We do this with a paired sample t-test since its the difference in a single measure we are testing here. We see there is a significant difference in the AUCi between the sessions. We also test an alternative method for baseline corrections (the Henckens response). To test if there is an increase in cortisol in the stress session, this value should be positive (stress-control/baseline). If stress-control is > 0, then the stress work. So we use a one-sample t-test against 0 to check if it works here.
+
+#### Hist. {-}
+```{r}
+hist(df_saliva.scan$cortisol)
+hist(log(df_saliva.scan$cortisol))
+```
+
+
+#### Main Effects {- .active}
+```{r}
+model.cort_scan <- glmer(cortisol ~ scan_type*time*first_scan + sex + (1+scan_type|subject_number), 
+                         family=Gamma(link="log"),
+                         glmerControl(calc.derivs =FALSE),
+                         contrasts=list(scan_type="contr.treatment", sex="contr.treatment"),
+                         data=df_saliva.scan)
+asis_output(tab_model(model.cort_scan, show.stat=TRUE, show.se=TRUE, transform=NULL)$knitr)
+check_model(model.cort_scan)
+```
+
+#### Post-Hoc {-}
+```{r}
+df_saliva.scan$run <- as.factor(df_saliva.scan$time_point)
+model.cort_scan_followup <- glmer(cortisol ~ scan_type*run + scan_type*first_scan + sex + (1+scan_type|subject_number), 
+                                  contrasts=list(scan_type="contr.treatment"),
+                         family=Gamma(link="log"), 
+                         glmerControl(calc.derivs =FALSE),
+                         data=df_saliva.scan)
+emmeans(model.cort_scan_followup, list(pairwise ~ scan_type*run),by=c("run"), adjust="none")
+```
+
+#### Post-Hoc: Sex/Contraceptive {-}
+
+```{r}
+model.cort_scan_contr <- glmer(cortisol ~ scan_type*time*first_scan + contraceptive_use + (1+scan_type|subject_number), 
+                         family=Gamma(link="log"),
+                         glmerControl(calc.derivs =FALSE),
+                         contrasts=list(scan_type="contr.treatment", contraceptive_use="contr.treatment"),
+                         data=df_saliva.scan)
+asis_output(tab_model(model.cort_scan_contr, show.stat=TRUE, show.se=TRUE, transform=NULL)$knitr)
+check_model(model.cort_scan_contr)
+```
+
+
+#### AUCi {-}
+```{r}
+df_saliva.wide_sub <- df_saliva.scan %>% dplyr::select(subject_number, age, sex, contraceptive_use, first_scan, AUCg_control:HPA_act) %>% unique() 
+describe(df_saliva.wide$AUCi_difference<0)
+model.auc <- lm(AUCi_stress - AUCi_control ~ 1 + first_scan + sex, data=df_saliva.wide_sub)
+summary(model.auc)
+```
+
+#### HPA Response {-}
+```{r}
+model.hpa <- lm(HPA_act ~ 1 + first_scan + sex, data=df_saliva.wide_sub)
+summary(model.hpa)
+```
+
+#### Plot {-}
+```{r}
+# Make Summary
+df_saliva.summ <- summarySEwithin(data=df_saliva.scan, idvar ="subject_number", withinvars =c("scan_type", "time_point"), measurevar = "cortisol", na.rm=TRUE)
+df_saliva.summ$time_point <- as.character(df_saliva.summ$time_point) %>% as.numeric(df_saliva.summ$time_point)
+
+#Construct the plot
+plot.cort_time <- ggplot(df_saliva.summ, aes(y=cortisol, x=time_point,  colour=scan_type)) +
+  # Add the scan phases
+  geom_rect(aes(xmin=3, xmax=10, ymin=3, ymax=6.2, color=NULL), fill="#E68613", alpha=0.02) +
+  geom_rect(aes(xmin=18, xmax=84, ymin=3, ymax=6.2, color=NULL), fill="lightgrey", alpha=0.02) +
+  geom_rect(aes(xmin=91, xmax=157, ymin=3, ymax=6.2 ,  color=NULL),fill="lightgrey", alpha=0.02) +
+  # Actial plot
+  geom_line(size=1, stat = "identity") +
+  geom_errorbar(aes(ymin=cortisol-se, ymax=cortisol+se),size=1, width=3, na.rm=T) +
+  geom_point(shape=20, size=3) + 
+  # Scale to make the graph start at 3
+  scale_y_continuous(expand = c(0, 0), limits = c(3, NA)) +
+  # Titles and labels
+  labs(colour="Session", fill="Phase")+
+  xlab("Time (minutes)") + ylab("Cortisol (nmol/L)\n") +
+  ggtheme2 + scale_color_manual(values=stress_colors)
+
+#Plot with time 
+plot.cort_time; ggsave(filename="figures/Figure_3_LabStres_A.svg", device="svg", plot = plot.cort_time, dpi=300, bg="white") #
+```
+
+### Amylase {- .tabset}
+In addition to the cortisol, we also assayed the levels of alpha amylase, which is used a proxy for adrenaline. We first take a look at the distribution of our variable to see if we need to do any transformations to it before modeling, and then proceed to do the models in the same way we did for the cortisol measures. We see that the distribution is a bit off, and that we need to apply a log transformation to get better fit in our models. 
+
+In the main effects of our models, we see that there is a significant effect of time, and that there is a significant interaction between scan order and the stress effects. We investigate this in follow-up models, and see that in people who had a stress session first, the heart rate was higher in the stress than control sessions, but not in those who had the control session first. We go on to plot this effect.
+
+#### Hist. {-}
+```{r}
+#hist(df_saliva.scan$alpha_amylase)
+hist(log(df_saliva.scan$alpha_amylase))
+```
+
+#### Main Effects {- .active}
+```{r}
+model.amylase_scan <- glmer(alpha_amylase ~ scan_type*time*first_scan + sex + (1+scan_type|subject_number), 
+                            contrasts=list(scan_type="contr.treatment", sex="contr.treatment"),
+                          family=Gamma(link="log"),
+                          glmerControl(calc.derivs = FALSE),
+                          data=df_saliva.scan)
+asis_output(tab_model(model.amylase_scan, show.se=TRUE, show.stat=TRUE, transform=NULL)$knitr)
+check_model(model.amylase_scan)
+```
+
+
+
+#### Post-Hoc {-}
+```{r}
+model.amylase_scan.fu <- glmer(alpha_amylase ~ scan_type*run + scan_type*first_scan + sex +(1+scan_type|subject_number), 
+                               contrasts=list(scan_type="contr.treatment"),
+                          family=Gamma(link="log"),
+                          glmerControl(calc.derivs = FALSE),
+                          data=df_saliva.scan)
+emmeans(model.amylase_scan.fu, pairwise ~ first_scan*scan_type, adjust="none")
+#emmip(model.amylase_scan.fu, ~ scan_type*first_scan)
+```
+
+#### Plot {-}
+```{r}
+# Make Summary
+df_saliva.summ_amy <-  summarySEwithin(data=df_saliva.scan, idvar ="subject_number", withinvars =c("scan_type", "time_point"), betweenvars = "first_scan", measurevar = "alpha_amylase", na.rm=TRUE)
+df_saliva.summ_amy$time_point <- as.character(df_saliva.summ_amy$time_point) %>% as.numeric(df_saliva.summ_amy$time_point)
+
+#Construct the plot
+plot.amylase_time <- ggplot(df_saliva.summ_amy , aes(y=alpha_amylase, x=time_point, colour=scan_type)) +
+  geom_line(size=1,stat = "identity", na.rm = TRUE, show.legend = TRUE) +
+  geom_errorbar(aes(ymin=alpha_amylase-se, ymax=alpha_amylase+se),size=1, width=3, na.rm=T) + 
+  geom_point(shape=20, size=3) + 
+  geom_rect(mapping=aes(xmin=3, xmax=12, ymin=50, ymax=150, fill='grey'), fill= 'lightgrey',color='lightgrey', alpha=0.05) +
+  scale_y_continuous()+# scale_x_continuous(breaks=c(0, 6, 18, 50, 100))+
+  ggtitle("Salivary Amylase During Scanning")+labs(colour="Session")+
+  xlab("Time (minutes)") + ylab("Amylase (nmol/L)\n")+ 
+  ggtheme2 + scale_color_manual(values=stress_colors)
+#Plot with error bats and marking significant differences
+plot.amylase_time + facet_grid(.~first_scan)
+```
+
+### IBI {- .tabset}
+Now we can look at the changes in the IBI as a function of stress. We expect the IBI to be increased following the stress induction. Here, we analyze the effects of across the 10 scanner runs our participants had (including the resting state runs).In the models, we again include the scan order as a fixed effect in the same way we did for the cortisol analysis.
+
+There is a significant main effect of time, a two-way interaction between stress and scan order, and three-way interaction between stress effects, time, and scan order. A follow-up shows that the stress effect is only present in those who have the stress session first, 
+
+#### Main Effects {- .active}
+```{r} 
+# IBI Linear Model
+model.IBI_scan <- lmer(ibi ~ session*run*first_scan + sex + (session|sub_nr),
+                       contrasts=list(session="contr.treatment", sex="contr.treatment"),
+                       data=df_HR)
+asis_output(tab_model(model.IBI_scan, show.se=T, show.stat=T)$knitr)
+check_model(model.IBI_scan)
+```
+
+#### Post-Hoc {-}
+```{r}
+df_HR$Run <- as.factor(df_HR$run)
+model.ibi_scan.fu <- lmer(ibi ~ session*Run*first_scan + sex + (session|sub_nr), 
+                           contrasts=list(session="contr.treatment", sex="contr.treatment"),
+                         data=df_HR )
+emmeans(model.ibi_scan.fu, list(pairwise ~ session*first_scan),by=c("first_scan"), adjust="none")
+emmeans(model.ibi_scan.fu, list(pairwise ~ session*Run),by=c("first_scan", "Run"), adjust="none")
+```
+
+#### Plot {-}
+```{r}
+# Make Summary
+df_HR.summ <- summarySEwithin(data=df_HR, idvar ="sub_nr", withinvars =c("session", "run"), betweenvars = "first_scan", measurevar = "ibi", na.rm=TRUE)
+df_HR.summ <- na.omit(df_HR.summ)
+df_HR.summ$run <- as.numeric(as.character(df_HR.summ$run))
+df_HR.summ$Phase <- ifelse(df_HR.summ$run<6, "Early", "Late")
+
+#Construct the plot
+plot.ibi_time <- ggplot(df_HR.summ, aes(y=ibi, x=run, color=session)) +
+  # Make the background session squares
+  geom_rect(aes(xmin=0, xmax=0.6, ymin=62, ymax=72, color=NULL), fill="#E68613", alpha=0.02) +
+  geom_rect(aes(xmin=0.8, xmax=5.2, ymin=62, ymax=72, color=NULL), fill="lightgrey", alpha=0.02) +
+  geom_rect(aes(xmin=5.8, xmax=10.2, ymin=62, ymax=72 ,  color=NULL),fill="lightgrey", alpha=0.02) +
+  # Actual Plot
+  geom_line(stat = "identity", show.legend = TRUE) +
+  geom_errorbar(aes(ymin=ibi-se, ymax=ibi+se), width=0.25, na.rm=T) +
+  geom_point(shape=20, size=2, line=2) + 
+  # Legen titles and such
+  labs(colour="Session", fill="Session")+
+  xlab("") + ylab("Heart Rate (BPM)")+  scale_x_continuous(breaks=c(1,2,3,4,5,6,7,8,9,10)) + 
+  guides(color=guide_legend(order=2)) +
+  ggtheme2 + scale_color_manual(values=stress_colors )  #+ scale_fill_manual(values=c("lightgrey", "lightgrey", ))
+#plot.ibi_time
+plot.ibi_time + facet_grid(first_scan~.)
+```
+
+### RMSSD {- .tabset}
+Now we can take a look at the RMSSD values. First we check the distribution to aid with model decisions and then run the models. There is a significant time by session effect here, with a significant effect of scan order on the session effect. We see that in people who had a stress session first, there is an overall lower RMSSD in the stress session.  
+
+#### Hist. {-}
+```{r}
+hist(log(df_HR$rtmssd))
+```
+
+#### Main Effects {- .active}
+```{r}
+model.rmssd_scan <- glmer(rtmssd ~ session*run*first_scan + sex + (session|sub_nr),
+                           contrasts=list(session="contr.treatment", sex="contr.treatment"),
+                         data=df_HR,
+                         family=Gamma(link="log"),
+                         control=glmerControl(calc.derivs=FALSE))
+
+asis_output(tab_model(model.rmssd_scan, show.stat=TRUE, show.se=TRUE, transform=NULL, digits =3 )$knitr)
+check_model(model.rmssd_scan)
+```
+
+
+
+#### Post-Hoc {-}
+```{r}
+df_HR$Run <- as.factor(df_HR$run)
+model.rmssd_scan.fu <- glmer(rtmssd ~ session*Run*first_scan + sex + (session|sub_nr), 
+                              contrasts=list(session="contr.treatment"),
+                         data=df_HR,
+                         family=Gamma(link="log"),
+                         control=glmerControl(calc.derivs=FALSE, optimizer ="bobyqa"))
+emmeans(model.rmssd_scan.fu, list(pairwise ~ session*first_scan),by=c("first_scan"), adjust="none")
+emmeans(model.rmssd_scan.fu, list(pairwise ~ session*Run),by=c("Run"), adjust="none")
+```
+
+#### Plot{-}
+```{r}
+# Make Summary
+df_HR.summ <- summarySEwithin(data=df_HR, idvar ="sub_nr", withinvars =c("session", "run"),betweenvars ="first_scan", measurevar = "rtmssd", na.rm=TRUE)
+df_HR.summ <- na.omit(df_HR.summ)
+df_HR.summ$run <- as.numeric(as.character(df_HR.summ$run))
+
+#Construct the plot
+plot.rtmssd_time <- ggplot(df_HR.summ, aes(y=rtmssd, x=run, colour=session)) +
+  # Make the background session squares
+  geom_rect(aes(xmin=0, xmax=0.6, ymin=47, ymax=72, color=NULL), fill="#E68613", alpha=0.02) +
+  geom_rect(aes(xmin=0.8, xmax=5.2, ymin=47, ymax=72, color=NULL), fill="lightgrey", alpha=0.02) +
+  geom_rect(aes(xmin=5.8, xmax=10.2, ymin=47, ymax=72 ,  color=NULL),fill="lightgrey", alpha=0.02) +
+  # Add labels
+  # geom_label(aes(x=0.4, y=75, label="SECPT"), color="black") +
+  # geom_label(aes(x=3, y=75, label="Early"), color="black") +
+  # geom_label(aes(x=8, y=75, label="Late"), color="black") +
+  # Actual Plot
+  geom_line(stat = "identity", show.legend = TRUE) +
+  geom_errorbar(aes(ymin=rtmssd-se, ymax=rtmssd+se), width=0.25, na.rm=T) +
+  geom_point(shape=20, size=2, line=2) + 
+  labs(colour="Session", fill="Session")+
+  xlab("Scanner Run") + ylab("RMSSD (ms)") +  scale_x_continuous(breaks=c(1,2,3,4,5,6,7,8,9,10)) +scale_y_continuous(n.breaks = 5) +
+  ggtheme2 + scale_color_manual(values=stress_colors)
+plot.rtmssd_time + facet_grid(first_scan~.) 
+```
+
+### Full Plot {-}
+```{r, message=FALSE, warning=FALSE}
+plot.physio_full <- ggarrange(plot.cort_time, 
+                              ggarrange(NULL, (plot.ibi_time + theme(axis.text.x=element_text(size=6)) + facet_grid(first_scan~.)), 
+                                       NULL, (plot.rtmssd_time + theme(axis.text.x=element_text(size=6))+ facet_grid(first_scan~.)),
+                                       ncol=2, nrow=2, legend="none", align = "hv", labels = c("B", NA, "C", NA), widths=c(0.1,1)), 
+          common.legend = T, legend="bottom", widths=c(1.5, 1), labels=c("A"))
+```
+
+```{r}
+# I separated this chunk because ggarrange was producing a random blank plot
+plot.physio_full
+ggsave("figures/Figure_3_LabStress.svg", dpi=300, device="svg", bg="white", width =8)
+```
+
+
+# fMRI: Large-scale networks under stress
+We have now validated our stress exposure paradigms in both the lab and real life. We were also able to derive a single measure from each of the stress exposure paradigms we have. That is, we have the AUCi as our indicator of lab stress reactivity, and our residual based stress score for the real-life data. We can incorporate these two measures into our fMRI analysis. We do this in two ways: GLMs in the FSL software tool box, and models here in R for our ROI based analysis. 
+
+Before we start this analysis though, we do some signal exploration below. We describe briefly in the [Introduction]() what tasks were used, but not the entirety of the fMRI design. In summary, our participants underwent a stress and control fMRI session. These sessions consisted of two halves, each with 3 runs. The three runs in each half are modeled at the first level in FSL to end up with four fMRI sessions per participant. The first three runs consist of the early phase, while the last three consist of the late phase. This results in: 
+
+- Control Early
+- Control Late
+- Stress Early
+- Stress Late
+
+This design gives us insight into the temporal dynamics of stress reactivity and recovery. We first explore the mean task related activity across all four sessions, and then examine the stress effects (stress-control). These effects are modeled at the subject level in FSL. For both the mean task and the stress related differences, we have two contrasts. The baseline contrast models the mean task activity relative to the implicit baseline, while the task related contrasts models the task related activity during the specific task, relative to the activity during the other tasks. This latter contrast is the main one we are interested in, as it specifically reflects the network resource allocations. 
+```{r}
+# Load data
+df_fmri.signal <-read.csv("/project/3013068.02/stats/fMRI/Signal/fMRI_signal_event_stress_zstat.txt", sep='\t', header=T) %>%
+  dplyr::group_by(sub_nr, cope) %>% distinct(Mask,Run, .keep_all=TRUE) %>% ungroup %>% dplyr::mutate(Network=Mask) %>% 
+  dplyr::mutate(Contrast=str_replace(cope, "cope1", "2Back"),                                                                     
+                Contrast=str_replace(Contrast, "cope2", "NoBack"),
+                Contrast=str_replace(Contrast, "cope3", "2Back>NoBack"), 
+                Contrast=str_replace(Contrast, "cope4", "Oddball"),
+                Contrast=str_replace(Contrast, "cope5", "Noddball"),
+                Contrast=str_replace(Contrast, "cope6", "Odd>Nodd"),
+                Contrast=str_replace(Contrast, "cope7", "Mem-Rem"),
+                Contrast=str_replace(Contrast, "cope8", "Mem-For"),
+                Contrast=str_replace(Contrast, "cope9", "Rem>For"),
+                Contrast=str_replace(Contrast, "2Back0", "ECN-Con"),
+                Contrast=str_replace(Contrast, "2Back1", "SN-Con"),
+                Contrast=str_replace(Contrast, "2Back2", "DMN-Con"),
+                Contrast=str_replace(Contrast, "2Back3", "2Back+NoBack")) %>%
+    dplyr::mutate(Contrast= factor(Contrast, levels=c("2Back", "NoBack", "2Back>NoBack", "ECN-Con", "2Back+NoBack",
+                                                      "Oddball", "Noddball", "Odd>Nodd","SN-Con", 
+                                                      "Mem-Rem", "Mem-For", "Rem>For", "DMN-Con")))
+
+# Filter for plots and average tests
+df_fmri.signal_mean <- df_fmri.signal %>% filter(Run=="Mean")
+df_fmri.signal_event <- df_fmri.signal %>% filter(Run!="Mean")
+```
+
+We will also try to link the laboratory stress measure, to the real-life measure. We then try to see how either of these could be related to our large scale network balance. In order to do so, we need to perform some data cleaning, where we add all the data of interest together. We need to combine the fMRI, the cortisol, and the stress-based residual together into one data frame. We also save a data frame with just three columns: subject number, cortisol, and the residualized score to use in FSL directly. 
+```{r}
+# Merge the dataframes to include the stress reactivity measures
+df_combo <- merge(df_stressrx, df_saliva.wide_sub, by.x="id", by.y="subject_number") 
+df_combo.fmri <- df_fmri.signal_event
+df_combo.fmri$id <- paste("sub", (str_pad(df_combo.fmri$sub_nr, 3, pad = "0")), sep="_") 
+df_combo <- merge(df_combo, df_combo.fmri, by="id")
+
+
+# Rescale and center data points for modeling
+## Cortisol
+df_combo$HPA_act[is.na(df_combo$HPA_act)] <- mean(df_combo$HPA_act, na.rm=T)
+df_combo$AUCi_difference[is.na(df_combo$AUCi_difference)] <- mean(df_combo$AUCi_difference, na.rm=T)
+## Rescale
+df_combo <- df_combo %>% subset(! is.na(Signal)) %>% dplyr::mutate(HPA_act_z=scale(HPA_act, center=TRUE), stress_rx_z=scale(resBIN, center=TRUE), signal_z=scale(Signal, center=TRUE), AUCi_diff_z=scale(AUCi_difference, center=TRUE))
+df_combo <- as.data.frame(df_combo)
+# Contrast settings
+df_combo$sex <- as.factor(df_combo$sex)
+contrasts(df_combo$sex) <- contr.treatment(c("Female", "Male"))
+df_combo$contraceptive_use <- as.factor(df_combo$contraceptive_use)
+contrasts(df_combo$contraceptive_use) <- contr.treatment(c("Male", "No", "Yes"))
+## Save as dataframe for fMRI whole brain analysis
+df_combo.tosave <- df_combo %>% dplyr::select(sub_nr, stress_rx_z, HPA_act_z, AUCi_diff_z) %>% unique()
+write.csv2(df_combo.tosave, "data/fMRI_regressor.txt", dec="." )
+```
+
+
+## Mean Task Effects {.tabset}
+Here we check for the main task effects for our 2Back (ECN), Oddball (SN), and Retrieval (DMN) contrasts. To do this, we plot the mean signal from each the tasks across networks. What we would ideally like to see is the recruitment of the corresponding network-task combinations. While we do see this in the ECN and SN contrasts, we do not really get this effect for the DMN. 
+
+### ECN: 2Back {-}
+```{r}
+# Filter and generate summary
+df_fmri.2back <- df_combo %>% subset(cope=="cope1" | cope=="cope2" | cope=="cope3")
+df_fmri.2back <- summarySEwithin(data=df_fmri.2back, idvar="sub_nr", measurevar="Signal", withinvars = c("Network", "cope", "Contrast"))
+asis_output(tab_model(lmer(Signal ~ 1 + sex+ (1|id), data=(df_combo%>% subset(cope=="cope3" & Network=="ECN"))))$knitr)
+# Make plot
+plot_fmri.mean_ecn <- ggplot(df_fmri.2back , aes(y=Signal, x=Network, color=Network, fill=Network, na.rm = TRUE)) +
+  geom_bar(stat="identity", alpha=0.5, position="dodge2" ) +
+   geom_errorbar(aes(ymin=Signal-se, ymax=Signal+se, color=Network),size=1, width=0.5, na.rm=T, position=position_dodge(.9)) +
+  geom_hline(yintercept=0, color="grey") +
+  ggtitle("Parameter Estimates of Task-Network Engagement") + ylab("P.E.") + xlab(" ") + 
+  scale_color_manual(values=fmri_colors) + scale_fill_manual(values=fmri_colors) + 
+  ggtheme2 + theme(axis.text.y=element_text(size=12), plot.title=element_text(hjust = 0), legend.position="right")
+plot_fmri.mean_ecn  + facet_wrap(Contrast~., ncol=3)
+```
+
+
+### SN: Oddball {-}
+```{r}
+# Subset + Model
+df_fmri.odd <- df_combo %>% subset(cope=="cope4" | cope=="cope5" | cope=="cope6")
+df_fmri.odd <- summarySEwithin(data=df_fmri.odd, idvar="sub_nr", measurevar="Signal", withinvars = c("Network", "cope", "Contrast"))
+asis_output(tab_model(lmer(Signal ~ 1 + sex + (1|id), data=(df_combo%>% subset(cope=="cope6" & Network=="SN"))))$knitr)
+# Plot
+plot_fmri.mean_sn <- ggplot(df_fmri.odd, aes(y=Signal, x=Network, color=Network, fill=Network, na.rm = TRUE)) +
+  geom_bar(stat="identity", alpha=0.5, position="dodge2" ) +
+   geom_errorbar(aes(ymin=Signal-se, ymax=Signal+se, color=Network),size=1, width=0.5, na.rm=T, position=position_dodge(.9)) +
+  geom_hline(yintercept=0, color="grey") +
+  ggtitle("Parameter Estimates of Task-Network Engagement") + ylab("P.E.") + xlab(" ")+ 
+  scale_color_manual(values=fmri_colors) + scale_fill_manual(values=fmri_colors) + 
+  ggtheme2 + theme(axis.text.y=element_text(size=12), plot.title=element_text(hjust = 0), legend.position="right")
+plot_fmri.mean_sn   + facet_wrap(Contrast~.)
+```
+
+### DMN: Memory {-}
+```{r}
+# Subset + Model
+df_fmri.mem <- df_combo %>% subset(cope=="cope7" | cope=="cope8" | cope=="cope9") 
+df_fmri.mem <- summarySEwithin(data=df_fmri.mem, idvar="sub_nr", measurevar="Signal", withinvars = c("Network", "cope", "Contrast"))
+asis_output(tab_model(lmer(Signal ~ 1 + sex + (1|id), data=(df_combo%>% subset(cope=="cope9" & Network=="DMN"))))$knitr)
+# Plot
+plot_fmri.mean_dmn <- ggplot(df_fmri.mem, aes(y=Signal, x=Network, color=Network, fill=Network, na.rm = TRUE)) +
+  geom_bar(stat="identity", alpha=0.5, position="dodge2" ) +
+   geom_errorbar(aes(ymin=Signal-se, ymax=Signal+se, color=Network),size=1, width=0.5, na.rm=T, position=position_dodge(.9)) +
+  geom_hline(yintercept=0, color="grey") +
+  ggtitle("Parameter Estimates of Task-Network Engagement") + ylab("P.E.") + xlab(" ") + 
+  scale_color_manual(values=fmri_colors) + scale_fill_manual(values=fmri_colors) + 
+  ggtheme2 + theme(axis.text.y=element_text(size=12), plot.title=element_text(hjust = 0), legend.position="right")
+plot_fmri.mean_dmn   + facet_wrap(Contrast~.)
+```
+
+### ROI-Task Pairs {- .active}
+```{r}
+df_fmri.mean <- df_combo %>% subset((cope=="cope3" & Network=="ECN") | (cope=="cope6" & Network=="SN") | (cope=="cope9" & Network=="DMN"))
+df_fmri.mean_sum <- summarySEwithin(data=df_fmri.mean, idvar="sub_nr", measurevar="Signal", withinvars = c("Network", "cope", "Contrast"))
+df_fmri.mean_sum$Contrast <- factor(df_fmri.mean_sum$Contrast)
+
+plot.fmri_mean <- ggplot(df_fmri.mean_sum, aes(y=Signal, x=Network, color=Contrast, fill=Contrast, na.rm = TRUE)) +
+  geom_bar(stat="identity", alpha=0.5, position="dodge2", width=0.7 ) +
+   geom_errorbar(aes(ymin=Signal-se, ymax=Signal+se),size=1, width=0.4, na.rm=T, position=position_dodge(.9)) +
+  geom_hline(yintercept=0, color="grey") +
+  ggtitle("Parameter Estimates of Task-Network Engagement") + ylab("Parameter Estiamtes") + xlab("\nROI") + 
+  scale_color_manual(values=c("#0CB702", "#F8766D", "#00BFC4")) + scale_fill_manual(values=c("#0CB702", "#F8766D", "#00BFC4" )) + 
+  ggtheme2 + 
+  theme(plot.title=element_text(hjust = 0), legend.position="right", 
+        axis.text.y=element_text(size=12), 
+        axis.text.x=element_text(size=12, colour="black"))
+plot.fmri_mean
+
+```
+
+
+## Stress Related Activity
+We next take a look at the difference between stress and control sessions in the MRI. We first code the stress and control session as well as the early and late phases to make some factors out of them. We also filter only the specific contrasts we want to investigate. That is, the 2Back > non-target, the oddball > standard, and the remembered > forgotten contrasts. Once we have that, we construct a first model to look at main effects, and then break  down these effects per task/network. We also can take a look at the difference in neural stress reactivity, and how that can further inform us regarding daily life stress reactivity. Finally we take a look at the concept of network balance, as laid out by [Krause et. al. 2021](https://www.sciencedirect.com/science/article/pii/S1053811921008004?via%3Dihub). 
+
+```{r}
+df_fmri.stress <- df_combo %>% separate(Run, into=c("Session","Run"), sep="-" ) %>% subset((cope=="cope3" & Network=="ECN") | (cope=="cope6" & Network=="SN") | (cope=="cope9" & Network=="DMN")) %>% dplyr::mutate(Network=relevel(Network, "SN", "ECN", "DMN"))
+```
+
+### Main Effects {- .tabset}
+In our main model, we see that there is a significant session by ROI and session by run interaction effect. The mixed models show us a comparison relative to baseline conditions (Control, Early) and in network 1 which we coded as SN. We see that there is a significant network effect, session*run interaction, and session by network interaction. We also see there is a significant 4-way interaction effect between session, run, network, and the resilience score in the ECN relative to SN. To simplify the interpretation, we also present the models in a simple ANOVA output for easier interpretation for the model with only the SN and ECN. The establishment of these main effects also allows us to run the next follow-up tests.
+
+#### Model: Full {-}
+```{r, warning=FALSE}
+# Main model without covaritates
+model.fmri_main <- lmer(Signal ~ Session*Run*Network + first_scan + sex + (1+Session+Run+Network|id), 
+                         contrasts=list(Session="contr.treatment"),
+                        data=df_fmri.stress, 
+                        control=lmerControl(optimizer="bobyqa", calc.derivs = F))
+# Residal Score Model
+model.fmri_main_res <- lmer(Signal ~ Session*Run*Network*resBIN + first_scan +sex + (1+Session+Run+Network|id), 
+                            contrasts=list(Session="contr.treatment"),
+                        data=df_fmri.stress, 
+                        control=lmerControl(optimizer="bobyqa", calc.derivs = F))
+# AUCi Model
+model.fmri_main_auci <- lmer(Signal ~ Session*Run*Network*AUCi_difference + first_scan + sex +(1+Session+Run+Network|id), 
+                             contrasts=list(Session="contr.treatment"),
+                        data=df_fmri.stress, 
+                        control=lmerControl(optimizer="bobyqa", calc.derivs = F))
+# Full Model
+model.fmri_main_full <- lmer(Signal ~ Session*Run*Network*resBIN + Session*Run*Network*AUCi_difference + first_scan + sex + (1+Session+Run+Network|id), 
+                             contrasts=list(Session="contr.treatment"),
+                        data=df_fmri.stress, 
+                        control=lmerControl(optimizer="bobyqa", calc.derivs = F))
+# HTML Table with all
+asis_output(tab_model(model.fmri_main,  model.fmri_main_res, model.fmri_main_auci,  model.fmri_main_full,
+                             show.stat=TRUE, show.se=TRUE, digits = 3, 
+                             dv.labels =c("Signal", "Signal~Resilience", "Signal~AUCi",  "Signal ~Full"))$knitr)
+
+
+```
+
+<br>
+
+#### Model: Full as ANOVA {-}
+```{r}
+asis_output(kbl(anova(model.fmri_main), digits=3, caption ="**Classic ANOVA Output of Main Effect**", align ="l"))
+```
+
+
+#### Plot {-}
+```{r, message=FALSE, warning=FALSE}
+# Calculate the difference between stress and control 
+df_fmri.stress_wide <- df_fmri.stress %>% pivot_wider(., id_cols = c("sub_nr","age","sex", "contraceptive_use", "first_scan", "Network","Contrast"), names_from =c("Session","Run" ), values_from=c("Signal", "resBIN", "AUCi_difference")) %>% 
+  mutate(`SE-CE`=Signal_Stress_Early-Signal_Control_Early, `SL-CL`=Signal_Stress_Late-Signal_Control_Late) %>%
+  pivot_longer(., cols=c( "SE-CE", "SL-CL"), names_to="Run",values_to="Stress-Control" ) %>% 
+  dplyr::mutate(Run=str_replace(Run, "SE-CE", "Early"), Run=str_replace(Run, "SL-CL", "Late"))
+
+df_fmri.stress$sex <- as.factor(df_fmri.stress$sex)
+contrasts(df_fmri.stress$sex) <- contr.treatment(c("Male", "Female"))
+
+# Make summary stats
+df_fmri.stress_summ <- summarySEwithin(data=df_fmri.stress_wide, idvar="sub_nr", measurevar="Stress-Control", withinvars = c("Run", "Network", "Contrast"))
+df_fmri.stress_summ$Net_Run <-paste(df_fmri.stress_summ$Network, df_fmri.stress_summ$Run, sep="\n")
+df_fmri.stress_summ$Net_Run <- fct_relevel(df_fmri.stress_summ$Net_Run, "DMN-Early", "DMN-Late", "ECN-Early", "ECN-Late", "SN-Early")
+
+# Plot
+fmri_colors2 <- c("#00BFC4","#00B8E7", "#7CAE00", "#0CB702", "#F8766D","#E68613" )
+plot.fmri_stress <- ggplot(df_fmri.stress_summ, aes(y=`Stress-Control`, x=Net_Run, color=Net_Run, fill=Net_Run, na.rm = TRUE)) +
+   geom_hline(yintercept=0, color="grey") + 
+   geom_bar(stat="identity", alpha=0.5, position=position_dodge2() ) +
+   geom_errorbar(aes(ymin=`Stress-Control`-se, ymax=`Stress-Control`+se),size=1, na.rm=T,width=0.4, position=position_dodge2(padding = 0.75)) +
+  ylab(sprintf("\U03B2Stress - \U03B2 Control (a.u.)")) + xlab("Networks") +
+   scale_color_manual(values=fmri_colors2) + scale_fill_manual(values=fmri_colors2) + 
+   ggtheme2 + theme(plot.title=element_text(hjust=0, size=16), legend.position="none",
+                    axis.text.y=element_text(size=10), axis.title.y=element_text(size=12),
+                    axis.text.x=element_text(size=10), axis.ticks.x=element_line(size=1), axis.title.x =element_text(size=12)) 
+  #guides( fill="none",color=guide_legend(colour=fmri_colors, override.aes=list(linetype=c(1, 1, 1), shape=c(16,16,16), fill=c("#00BFC4","#0CB702","#F8766D") ))) 
+plot.fmri_stress; ggsave("figures/Figure_4_A.svg", device="svg", bg="white")
+
+```
+
+### Network Effects {- .tabset}
+We established some interesting stress effects above. Now we want to perform follow-up tests for each network individually. Note that these results to some extent (for example, session and run effects) are just repetitions of the main effects we established above. Interestingly, we see that there is a significant interaction between stress, time, and the residual resilience score in the salience network. 
+
+#### ECN {-}
+```{r}
+# Filter df
+df_fmri.ecn <- df_fmri.stress %>% subset(Contrast=="2Back>NoBack" & Network=="ECN" )
+
+# Run model with AUCI
+model.ecn_auc <- lmer(Signal ~ Session*Run*AUCi_diff_z + first_scan + sex + (1+Session+Run|sub_nr),
+                      contrasts=list(Session="contr.treatment"),
+                      data=df_fmri.ecn, 
+                      control=lmerControl(optimizer=c("bobyqa"), calc.derivs=F))
+# Run model with resilience
+model.ecn_res <- lmer(Signal ~ Session*Run*resBIN + first_scan + sex + (1+Session+Run|sub_nr),
+                      contrasts=list(Session="contr.treatment"),
+                      data=df_fmri.ecn, 
+                      control=lmerControl(optimizer=c("bobyqa"), calc.derivs=F))
+# Full model
+model.ecn_full <- lmer(Signal ~ Session*Run*resBIN + Session*Run*AUCi_diff_z + first_scan + sex + (1+Session+Run|sub_nr),
+                       contrasts=list(Session="contr.treatment"),
+                      data=df_fmri.ecn,
+                      control=lmerControl(optimizer=c("bobyqa"), calc.derivs=F))
+# Tab and print results
+tab.ecn_react <- tab_model(model.ecn_auc, model.ecn_res, model.ecn_full,
+                           dv.labels=c("AUCi", "Real Life", "Full"), 
+                           show.se = T, show.stat = T, emph.p = T,
+                           df.method="kenward" )
+knitr::asis_output(tab.ecn_react$knitr)
+```
+
+
+#### SN {- .tabset}
+```{r}
+# Filter only SN
+df_fmri.sn <- df_fmri.stress %>% subset(Contrast=="Odd>Nodd" & Network=="SN" )
+# AUC model
+model.sn_auc <- lmer(Signal ~ Session*Run*AUCi_diff_z + first_scan + sex + (1+Session+Run|sub_nr),
+                     contrasts=list(Session="contr.treatment"),
+                     data=df_fmri.sn)
+# Resilience Model
+model.sn_res <- lmer(Signal ~ Session*Run*resBIN + first_scan + sex + (1+Session+Run|sub_nr),
+                     contrasts=list(Session="contr.treatment"),
+                     data=df_fmri.sn)
+# Full
+model.sn_full <- lmer(Signal ~ Session*Run*resBIN + Session*Run*AUCi_diff_z + first_scan + sex + (1+Session+Run|sub_nr),
+                      contrasts=list(Session="contr.treatment"),
+                     data=df_fmri.sn)
+# HTML Tab
+tab.sn_react <- tab_model(model.sn_auc, model.sn_res, model.sn_full,
+                          dv.labels=c("AUCi", "Real Life", "Full"), show.se = T, show.stat = T)
+knitr::asis_output(tab.sn_react$knitr)
+```
+
+
+```{r}
+emtrends(model.sn_full, identity ~ Session | Run, var="resBIN")
+```
+
+
+#### DMN {-}
+```{r}
+# Filter DMN tasks
+df_fmri.dmn <- df_fmri.stress %>% subset(Contrast=="Rem>For" & Network=="DMN" )
+# AUC Model
+model.dmn_auc <- lmer(Signal ~ Session*Run*AUCi_diff_z + first_scan + sex + (1+Session+Run|sub_nr),
+                      contrasts=list(Session="contr.treatment"),
+                      data=df_fmri.dmn)
+# Resilience Model
+model.dmn_res <- lmer(Signal ~ Session*Run*resBIN + first_scan + sex + (1+Session+Run|sub_nr),
+                      contrasts=list(Session="contr.treatment"),
+                      data=df_fmri.dmn)
+# Full model
+model.dmn_full <- lmer(Signal ~ Session*Run*resBIN + Session*Run*AUCi_diff_z + first_scan + sex + (1+Session+Run|sub_nr),
+                       contrasts=list(Session="contr.treatment"),
+                       control=lmerControl(optimizer="bobyqa", calc.derivs = F),
+                      data=df_fmri.dmn)
+# HTML Output
+tab.dmn_react <- tab_model(model.dmn_auc, model.dmn_res, model.dmn_full, 
+                           dv.labels=c("AUCi", "Real Life", "Full"),show.se=T, show.est=T, show.stat = T)
+knitr::asis_output(tab.dmn_react$knitr)
+```
+
+### SN Reactivity {- .tabset}
+We saw the main effects above, now we want to look as specific follow-ups of the stress resilience scores and the changes in MRI stress activity in our networks over time. We will only do this for the SN, since that is the only one of our main tests where we see an effect of stress on the network, and an interaction effect with the residualized score. To this end, we subtract Stress-Control from the MRI sessions to get a single measure of within subject reactivity in the lab in the early MRI run, and recover in the late MRI run.
+
+Additionally, in these models we slightly change the contrasts to see specific differences between the early and late phases. We therefore code the effect of Run as a contrast treatment here.
+```{r}
+df_fmri.stress_wide <- df_fmri.stress %>%  pivot_wider(id_cols=c("id","age","sex","contraceptive_use", "Run", "Network", "first_scan"), names_from="Session",  values_from=c("Signal", "resBIN", "AUCi_difference")) %>%  dplyr::mutate(Signal=Signal_Stress-Signal_Control) %>% dplyr::rename(resBIN=resBIN_Control)
+```
+
+
+#### Main Model {-}
+```{r}
+df_fmri.stress_sn <- df_fmri.stress_wide %>% dplyr::filter(Network=="SN")
+model.sn_run <- lmer(Signal ~ Run*resBIN + (1|id),  data=df_fmri.stress_sn, contrasts=list(Run="contr.treatment"))
+asis_output(tab_model(model.sn_run, show.se=T, show.stat=TRUE)$knitr)
+```
+<br>
+
+#### Post-Hoc {- .tabset}
+```{r}
+df_fmri.stress_sn_early <- df_fmri.stress_sn %>% filter(Run=="Early")
+model.sn_run_early <- lm(Signal ~ resBIN, data=df_fmri.stress_sn_early)
+df_fmri.stress_sn_late <- df_fmri.stress_sn %>% filter(Run=="Late")
+model.sn_run_late <- lm(Signal ~  resBIN, data=df_fmri.stress_sn_late)
+asis_output(tab_model(model.sn_run_early, model.sn_run_late, dv.labels = c("Early", "Late"), show.stat=TRUE, show.se=T)$knitr)
+emmip(model.sn_run, Run ~ resBIN, cov.reduce=range) + ggtheme2
+```
+
+
+
+<br>
+
+#### Plot: Early SN-Resilience {-}
+```{r}
+# Plot the SN-Stress relaiton to Resilience
+df_fmri.sn_early_wide <- df_fmri.sn %>% dplyr::filter(Run=="Early") %>% pivot_wider(id_cols=c("id", "age", "sex", "contraceptive_use", "first_scan"), names_from="Session",  values_from=c("resBIN", "Signal")) %>%  dplyr::mutate(Signal=Signal_Stress-Signal_Control) %>% dplyr::rename(resBIN=resBIN_Control) %>% dplyr::mutate(resBIN=resBIN*-1)
+
+# Plot 1: Resilience by reactivity
+plot.fmri_sndiff = ggplot(df_fmri.sn_early_wide, aes(x=resBIN, y=Signal, color="Stress-Control")) + 
+  geom_smooth(method="lm",formula=y~x, se=F, color="#F8766D" ) +
+  geom_point(alpha=0.7, color="#F8766D" ) + 
+  xlab(sprintf("SN Early (\U03B2 Stress - \U03B2 Control)\n")) + ylab("Real Life Stressor Reactivity (a.u.)") +
+  ggtheme2 + theme(  axis.text.y=element_text(size=10), axis.title.y=element_text(size=12),
+                    axis.text.x=element_text(size=10), axis.ticks.x=element_line(size=1), axis.title.x =element_text(size=12))
+plot.fmri_sndiff
+ggsave("figures/Figure_4_B_SN.svg", device="svg", bg="white")
+```
+
+<br>
+
+#### Post-Hoc: Recovery {-}
+
+
+```{r, message=FALSE, warning=FALSE}
+# Subset the data to get early-late difference
+df_fmri.sn_wide_recover <- df_fmri.sn %>%  pivot_wider(id_cols=c("id", "age", "sex", "contraceptive_use", "first_scan"), names_from=c("Session","Run"),  values_from=c("resBIN", "Signal")) %>% 
+  dplyr::mutate(Signal_Late=Signal_Stress_Late-Signal_Control_Late, Signal_Early=Signal_Stress_Early-Signal_Control_Early, Signal=Signal_Late-Signal_Early) %>%
+  dplyr::rename(resBIN=resBIN_Stress_Early) 
+
+# Remove outliers
+signal_sd <- sd(df_fmri.sn_wide_recover$Signal*3)
+signal_sd_neg <- -signal_sd
+df_fmri.sn_wide_recover <- df_fmri.sn_wide_recover %>% mutate(Signal=replace(Signal, Signal<signal_sd_neg | Signal>signal_sd, NA))
+
+# Model
+asis_output(tab_model(lm(Signal ~ resBIN, data=df_fmri.sn_wide_recover), title="Change from Early to Late")$knitr)
+
+```
+`
+
+
+### Full MRI Stress Plot {-}
+```{r}
+ggarrange(plot.fmri_stress, NULL, plot.fmri_sndiff, widths=c(1.2,0.01, 1), ncol = 3, labels = c("A", "B"), align = "hv")
+ggsave("figures/Figure_4_fMRIStress.svg", device="svg")
+```
+
+
+# fMRI: Tasks
+We have three tasks during the fMRI session which we need to analyze for our study as mentioned in the [Introduction]() section. These tasks include a 2-Back, Oddball, and Associative Retrieval. Each requires a slightly different approach so we do some data cleaning in chunks of code before we start. 
+
+## Data Cleaning
+We first import the data from individual logs. To this end, we have a small function that reads a file and assigns the subject ID. We compile the trial-by-trial logs for all subjects into a single data frame which we then subset for each task separately. We then combine this data frame with the last data frame we used in the previous section for the balance. 
+```{r}
+# First get a list of all the log files
+logs_beh <-(Sys.glob("/project/3013068.02/data/*/logs/mri/*mri*"))
+# Make a function to read the log files + add session + subject info
+read_add <- function(file, seperator, headers){
+    df <- read.csv2(file=file, sep=seperator, header=headers)
+    id <- file; id <- sub(".*sub_", "", id); id <- sub("/logs/.*", "", id)
+    df$id <- id
+    # Select session indicatior
+    ses <- file; ses <- sub(".*logs/mri/Sub", "", ses); ses <- sub(".txt.*", "", ses)
+    df$ses <- ses
+    df }
+
+# Run function
+df_task <- rbindlist(lapply(logs_beh, read_add, seperator="\t", headers=FALSE))
+# Coloumn headers
+names(df_task) <- c("task", "stimulus", "valence", "trial_onset", "trial_offset", "rt", "button_pressed", "button_correct",
+                         "block_onset","block_offset","experiment_start", "experiment_end", "sub_id", "session_id")
+# Drop the headers added when importing, and retype
+df_task <- df_task %>% subset(task != "Trial_Type" & task != "Trial_Type " ) %>% separate(session_id, c("sub", "mri", "session","run"))  %>% retype()
+
+# Make a factor for task types and sessions and runs
+df_task$sub_id <- as.factor(df_task$sub_id)
+df_task$sub_nr <- paste("sub", (str_pad(df_task$sub_id, 3, pad = "0")), sep="_") 
+# Label the tasks
+df_task$Task <- factor(df_task$task, level=c(1,2,3), labels=c("oddball", "nback", "memory"))
+# Label the session and runs
+df_task$Session <- factor(df_task$session, level=c("s1","s2"), labels=c("Control", "Stress"))
+df_task$Run <- factor(df_task$run, level=c("r1","r2","r3","r4","r5","r6"), labels=c("r1","r2","r3","r4","r5","r6"))
+df_task$run <- as.numeric(df_task$Run)
+df_task$Phase <- "Late"
+df_task$Phase[df_task$Run =="r1" | df_task$Run =="r2" | df_task$Run =="r3"] <- "Early"
+df_task$run <- as.numeric(df_task$Run)
+
+# Subset the fmri dataframe
+df_fmri.balance_4tasks <- df_fmri.stress  %>%  pivot_wider(id_cols=c(id, age, sex, contraceptive_use, first_scan, Session, Run), names_from=c(Network), values_from=c(Signal,resBIN,AUCi_difference) ) %>% dplyr::select(1:11,15) 
+names(df_fmri.balance_4tasks ) <- c("sub_nr","age","sex", "contraceptive_use", "Scan_Order",  "Session", "Run", "ECN", "SN", "DMN", "resBIN", "AUCi_diff")
+# Make the scores
+df_fmri.balance_4tasks  <- df_fmri.balance_4tasks  %>% dplyr::mutate(SN_ECN=SN-ECN, ECN_DMN=ECN-DMN, SN_DMN=SN-DMN) %>% dplyr::filter(!is.na(sex))
+
+df_task <- merge(df_task, df_fmri.balance_4tasks, by.x=c("sub_nr", "Session", "Phase"), by.y=c("sub_nr", "Session", "Run"))
+```
+
+### Nback {-}
+We start of with the nback task. We first correct the nback trials for the baseline reaction speed using the oddball reaction time from each run as the correcting factor. We then also calculate a measure that combines speed and accuracy after that. Here we use the LIASES method, which is a bit complicated. We do this in a separate chunk. 
+```{r message=FALSE, warning=FALSE}
+df_task.nback <- df_task %>% group_by(sub_id, Session, Run) %>% dplyr::mutate(odd_mean_rt=mean(ifelse(Task=="oddball", rt, NA), na.rm=TRUE)) %>% ungroup() %>% subset(Task=="nback") %>% subset(rt>200)
+df_task.nback$rt_corr <- df_task.nback$rt/df_task.nback$odd_mean_rt
+df_task.nback$Hit[df_task.nback$button_pressed>0 & df_task.nback$button_correct>0] <- 1 
+df_task.nback$Miss[df_task.nback$button_pressed==0 & df_task.nback$button_correct>0] <- 1 
+df_task.nback$FA[df_task.nback$button_pressed>0 & df_task.nback$button_correct==0] <- 1 
+df_task.nback$CorrRej[df_task.nback$button_pressed==0 & df_task.nback$button_correct==0] <- 1 
+``` 
+
+We now calculate the LIASES score based as detailed in the methods paper by [André Vandierendonck (2017)](https://link.springer.com/article/10.3758/s13428-016-0721-5). We need to get the RT by participant/condition, the SD of both the RTs and the PEs, and then the total PE per condition. SO we can then compare this measure between runs and conditions. The formula is RTj+ (SD(RT)/SD(PE)) * PEj where j=condition. So I first group by subject, get the RT sd, then group by session and run to get the PE per condition, and the RT per condition, and finally I get the overall PE from all conditions. 
+```{r}
+df_task.nback <- df_task.nback %>% group_by(sub_id) %>% dplyr::mutate(rt_sd=sd(ifelse(rt!=0, rt, NA), na.rm=TRUE)) %>% group_by(sub_id, Session, Run) %>% dplyr::mutate(pe=((sum(FA, na.rm=TRUE)+ sum(Miss, na.rm=TRUE))/length(rt)), rt_mean=mean(ifelse(rt!=0, rt, NA), na.rm=TRUE)) %>% ungroup %>% group_by(sub_id) %>% dplyr::mutate(pe_sd=sd(pe, na.rm=TRUE)) %>% subset(rt>200) %>% ungroup %>% dplyr::mutate(LIASES=rt_mean+(rt_sd/pe_sd)*pe) %>% ungroup()
+```
+
+### Memory {-}
+For the memory tasks, we have trials with negative, and others with neutral images. So the goal is to look at RT's, as well as the percent of correct responses. We subset the memory trials from the main data frame here, and then calculate all the measures we need for analysis. 
+```{r message=FALSE, warning=FALSE}
+# Filter out the memory trials
+df_task.mem <- df_task %>% subset(Task=="memory")
+# Label the factors
+df_task.mem$valence <- factor(df_task.mem$valence, levels=c(1,2), labels=c("neutral","negative"))
+# Get the number of correct answers and valences for sum calculates
+df_task.mem$corr_resp[df_task.mem$button_correct==df_task.mem$button_pressed] <- 1
+df_task.mem$incorr_resp[df_task.mem$button_correct!=df_task.mem$button_pressed] <- 1
+df_task.mem$mem_neu_n[df_task.mem$valence=="neutral"] <- 1
+df_task.mem$mem_neg_n[df_task.mem$valence=="negative"] <- 1
+
+# Get averages and the likes
+df_task.mem <- df_task.mem %>% group_by(sub_id, Session, Run) %>% dplyr::mutate(
+    mem_neu=sum(ifelse(valence=="neutral", mem_neu_n, NA), na.rm=TRUE),
+    mem_neg=sum(ifelse(valence=="negative", mem_neg_n, NA), na.rm=TRUE), 
+    mem_tot=mem_neg+mem_neu, 
+    mem_neu_corr=sum(ifelse(valence=="neutral", corr_resp, NA), na.rm=TRUE),
+    mem_neg_corr=sum(ifelse(valence!="neutral", corr_resp, NA), na.rm=TRUE),
+    mem_tot_corr=mem_neg_corr+mem_neu_corr, 
+    mem_neg_per=mem_neg_corr/mem_neg,
+    mem_neu_per=mem_neu_corr/mem_neu, 
+    mem_tot_per=(mem_neu_corr+mem_neg_corr)/mem_tot) %>% ungroup
+```
+
+### Oddball {-}
+We also need to import the data logs for the oddball. The main outcome measure for this task is the oddball recall done outside the scanner, which we analyze a little differently. For this, we need to calculate dprime. I will also be looking at the RTs here for the individual trials during scanning here. So in addition to the previous data frame from the scan, we also import the data frame from outside the scanner. This was already done in python, so we just need to bring in the new data frame with some minor cleaning. We also calculate dprime for the overall performance, and also the performance by valence
+```{r}
+# Oddball df
+df_task.odd  <- read.csv("/project/3013068.02/stats/fMRI/Behavioral/fmri_recall.csv", sep="\t", header=TRUE)
+
+#Add variable for separating late, early 
+df_task.odd$Scan[df_task.odd$session==1 & df_task.odd$run==1] <- 1
+df_task.odd$Scan[df_task.odd$session==1 & df_task.odd$run==2] <-2
+df_task.odd$Scan[df_task.odd$session==2 & df_task.odd$run==1] <-3
+df_task.odd$Scan[df_task.odd$session==2 & df_task.odd$run==2] <-4
+#Make phases into factor
+df_task.odd$Session <- factor(df_task.odd$session, levels=c(1,2),
+                     labels=c('Control', 'Stress'))
+df_task.odd$Scan <- factor(df_task.odd$Scan, levels=c(1,2, 3,4),
+                     labels=c('Control-Early','Control-Late',
+                              'Stress-Early', 'Stress-Late'))
+df_task.odd$Run <- factor(df_task.odd$run, levels=c(1,2),
+                     labels=c("Early","Late"))
+
+# Add the MRI signal data
+df_task.odd <- merge(df_task.odd, df_fmri.balance_4tasks, by.x=c("sub_nr", "Session", "Run"), by.y=c("sub_nr", "Session", "Run"))
+
+# Now we calculate dprime
+##First I drop the NAs
+df_task.odd <- na.omit(df_task.odd)
+df_task.odd_temp <- df_task.odd
+
+# Then make the frame
+df_task.odd_dprime_neg <-as.data.frame(dprime(df_task.odd_temp$odd_hits_neg, df_task.odd_temp$odd_FA_neg, n_miss=df_task.odd_temp$odd_miss_neg, n_cr=df_task.odd_temp$odd_correj_neg))
+colnames(df_task.odd_dprime_neg) <- paste(colnames(df_task.odd_dprime_neg), "neg", sep = "_")
+df_task.odd <- cbind(df_task.odd, df_task.odd_dprime_neg)
+
+df_task.odd_dprime_pos <- as.data.frame(dprime(df_task.odd_temp$odd_hits_pos, df_task.odd_temp$odd_FA_pos, n_miss=df_task.odd_temp$odd_miss_pos, n_cr=df_task.odd_temp$odd_correj_pos))
+colnames(df_task.odd_dprime_pos) <- paste(colnames(df_task.odd_dprime_pos), "pos", sep = "_")
+df_task.odd <- cbind(df_task.odd, df_task.odd_dprime_pos)
+
+df_task.odd_dprime <- dprime(df_task.odd_temp$odd_hits, df_task.odd_temp$odd_FA, n_miss=df_task.odd_temp$odd_miss, n_cr=df_task.odd_temp$odd_correj)
+df_task.odd <- cbind(df_task.odd, df_task.odd_dprime)
+```
+
+
+## Stats
+```{r}
+# Function to run models in parallel
+fx.par_model <- function(signal, dv, iv, re, sub_id, fam, data){
+  # Right hand formula; # Left hand formula
+  rs_formula=dv; 
+  ls_formula= paste(iv, signal,  sep="")
+  re_formula=paste("(", re, "|", sub_id,")", sep="")
+  # Put together ands run the model
+  full_form= paste(rs_formula, paste(ls_formula, re_formula, sep="+"),  sep="~")
+  if (fam=="lmer"){
+      run_model=lmer(as.formula(full_form),
+                     contrasts=list(Session="contr.treatment"),
+                     data=data, 
+                     control=lmerControl(calc.derivs=FALSE, optCtrl=list(maxfun=100000), optimizer="bobyqa"))
+  }else{
+  run_model=glmer(as.formula(full_form), 
+                  contrasts=list(Session="contr.treatment"),
+                  data=data,
+                  family=fam,
+                  control=glmerControl(calc.derivs=FALSE, optCtrl=list(maxfun=100000), optimizer="bobyqa")) }
+  return(run_model)}
+```
+
+### Nback {-}
+For the nback, we will look at three measures: The reaction time (RT), the number of errors (PE), and the combined score using the LIASES method to combine accuracy and speed. We'll run the RT model on individual trials where there was a response (so only response trials, without factoring in errors). We then look at the error rate using the proportion of misses and false alarms in the overall number of trials, and finally the LIASES that combines these effects, while also account for within subject deviations. These have all been calculated above, so we can just build the models here, and check the results. 
+
+<br>
+<br>
+
+#### Reaction Time {- .tabset}
+We first filter out the non-responses, and the responses that are too early.I also z-transform, and rescale the responses to make it easier to apply different types of fits. We then look at the distributions as that will help figure out the optimal models to fit. It appears that there is overall no real effect of reaction time, which I find strange looking at the graphs. Its OK though I guess. We don't run any post-hoc tests due to no main effects in our model either.
+
+##### Hist. {-}
+```{r}
+# First filter out the 0 RTs
+df_task.nback_rts <- subset(df_task.nback, rt>200)
+df_task.nback_rts$rt_z <- scale(df_task.nback_rts$rt, center=TRUE, scale=TRUE)
+df_task.nback_rts$rt_s <- scales::rescale(df_task.nback_rts$rt_z, to=c(0.01,7))
+hist((df_task.nback_rts$rt))
+
+```
+
+##### Models {- .active}
+```{r}
+# Contrast to investigate
+signals=list("", "ECN")
+
+# Run Models in parallel
+models.nback_rt <-  mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="rt_s", 
+                                               iv=ifelse(X=="",  "Session*Phase", "1+Session*Phase*"), 
+                                               re=ifelse(X=="",  "1+Session*Phase", paste("1+Session*Phase+", X, sep="")), 
+                                               sub_id="sub_id", 
+                                               fam=Gamma(link="inverse"), 
+                                               data=df_task.nback_rts)}, mc.cores=5)
+#HTML Output
+tab.2back_rt <- tab_model(models.nback_rt, dv.labels=c("Signal", "Signal ~ ECN"), show.stat=T, show.se=T)
+knitr::asis_output(tab.2back_rt$knitr)
+```
+<br>
+<br>
+
+
+##### Post-Hoc {-}
+```{r}
+
+joint_tests(models.nback_rt[[2]], by=c("Session", "Phase"))
+```
+<br>
+<br>
+
+##### Plot: Main {-}
+```{r, message=FALSE}
+df_task.nback_summ <- summarySEwithin(data=df_task.nback_rts, measurevar = "rt", idvar="sub_id", withinvars=c("Session", "Phase"), na.rm=FALSE)
+df_task.nback_summ$Phase <- as.numeric(df_task.nback_summ$Phase)
+df_task.nback_summ$Session <- relevel(df_task.nback_summ$Session, "Stress")
+ggplot(df_task.nback_summ, aes(x=Phase, y=rt, color=Session, fill=Session)) +
+    geom_line() + 
+    geom_errorbar(aes(ymin=rt-se, ymax=rt+se, color=Session),size=1, width=0.20, na.rm=T)+ 
+  ggtheme2
+```
+ <br>
+<br>
+
+
+
+##### Plot: ECN Phase {-}
+```{r}
+ggplot(df_task.nback_rts, aes(y=rt_s, x=ECN, colour=Phase)) + geom_smooth(method="lm") + scale_color_manual(values=stress_colors) + ggtheme2
+joint_tests(models.nback_rt[[2]],  by=c("Phase"))
+emtrends(models.nback_rt[[2]], pairwise ~ Phase, var="ECN")
+ggplot(df_task.nback_rts, aes(y=rt_s, x=SN, colour=Session)) + geom_smooth(method="lm") + scale_color_manual(values=stress_colors) + facet_grid(.~Phase) + ggtheme2
+```
+<br>
+<br>
+
+
+#### Proportion of Errors {- .tabset}
+For the error rates, we cant really take the trial-by-trial approach like we do with the reaction times, so instead we will take a look at the error rates per run/condition. We can use this filtered data frame later too for LIASES since we have a similar measure per session*run. We first calculate the number of errors instead of the proportion. Thats mainly because the proportion doesn't fit will in the models, and isn't an accurate representation given the zero-inflation. So we use counts instead, that way we can use a Poisson model which would fit the data much better. 
+```{r}
+# Subset
+df_task.nback_sum <- df_task.nback_rts
+df_task.nback_sum <- df_task.nback_sum %>% dplyr::select("sub_id", "Session", "Phase", "Run","run", "LIASES","pe", "FA", "Miss", "ECN", "SN", "SN_ECN") %>% group_by(sub_id, Session, Run) %>% dplyr::mutate(FA_count=sum(FA, na.rm=TRUE), Miss_count=sum(Miss, na.rm=TRUE), error_count=(FA_count+Miss_count)) %>% ungroup() %>% dplyr::select("sub_id", "Session", "Phase", "Run","run", "LIASES","pe", "error_count", "ECN", "SN", "SN_ECN") %>% unique()
+# Rescale the variables
+df_task.nback_sum$LIASES_z <- scale(df_task.nback_sum$LIASES, center=TRUE, scale=TRUE)
+df_task.nback_sum$pe_z <- scale(df_task.nback_sum$pe, center=TRUE, scale=TRUE)
+```
+
+##### Models {- .active}
+```{r}
+# Contrasts to investigate
+signals=list("", "ECN")
+# Ru moddels in parallel
+models.nback_pe <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="error_count", 
+                                               iv=ifelse(X=="",  "Session*Phase", "1+Session*Phase*"), 
+                                               re=ifelse(X=="",  "1+Session*Phase", paste("1+Session*Phase+", X, sep="")), 
+                                               sub_id="sub_id", 
+                                               fam=poisson(), 
+                                               data=df_task.nback_sum)}, mc.cores=5 )
+#HTML Output
+tab.2back_pe <- tab_model(models.nback_pe, dv.labels=signals, show.se=T, show.stat=T)
+asis_output(tab.2back_pe$knitr)
+
+```
+<br>
+<br>
+
+##### Post-Hoc: Main {-}
+```{r}
+emmeans(models.nback_pe[[1]],  list(pairwise ~Session*Phase), by=c("Phase"), adjust = "tukey")
+```
+<br>
+<br>
+
+##### Post-Hoc: Brain {-}
+```{r}
+joint_tests(models.nback_pe[[2]], by=c("Session", "Phase")) 
+```
+<br>
+<br>
+
+##### Plot {-}
+```{r, message=FALSE}
+df.nback_error_sum <- summarySEwithin(data=df_task.nback_sum, measurevar="error_count", idvar="sub_id", withinvars=  c("Phase", "Session"), na.rm=FALSE)
+df.nback_error_sum$Phase <- as.numeric(df.nback_error_sum$Phase)
+df.nback_error_sum$Session <- relevel(df.nback_error_sum$Session, "Stress")
+plot.nback_errors <- ggplot(df.nback_error_sum, aes(x=Phase, y=error_count, color=Session, fill=Session)) +
+    geom_bar(stat="summary", position="dodge2", alpha=0.5) + 
+    geom_errorbar(aes(ymin=error_count-se, ymax=error_count+se, color=Session),size=1, width=0.45, na.rm=T, position=position_dodge(.9) ) + ggtheme2
+plot.nback_errors
+```
+<br>
+<br>
+
+#### LIASES {- .tabset}
+The final measure we use to calculate the n-back performance is LIASES, which combines accuracy and speed. This method is mentioned earlier, and a data frame was subsetted in the chunk looking at the error rates, so we just need to build the model and run it here. I first tested different fits, and it appears that the inverse Gaussian is the best to fit this data. 
+
+
+##### Hist. {-}
+```{r}
+hist((df_task.nback_sum$LIASES_z))
+```
+<br>
+<br>
+
+##### Models {- .active}
+```{r, message=FALSE, warning=FALSE}
+# Parallel
+signals=list("",  "ECN" )
+models.nback_liases <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="LIASES_z",  
+                                               iv=ifelse(X=="",  "Session*Phase", "1+Session*Phase*"), 
+                                               re=ifelse(X=="",  "1+Session*Phase", paste("1+Session*Phase+", X, sep="")), 
+                                               sub_id="sub_id", 
+                                               fam=gaussian(link="inverse"), 
+                                               data=df_task.nback_sum)}, mc.cores=5)
+#HTML Output
+tab.2back_liases <- tab_model(models.nback_liases, dv.labels=c("Signal","Signal ~ ECN" ),show.stat=T, show.se=T)
+asis_output(tab.2back_liases$knitr)
+```
+<br>
+<br>
+
+##### Post-Hoc: Behavioural {-}
+```{r}
+emmeans(models.nback_liases[[1]], pairwise ~ Session | Phase, adjust="none")
+```
+<br>
+<br>
+
+##### Plot: Behavioral {-}
+```{r}
+df_task.nback_summ <- summarySEwithin(df_task.nback, measurevar="LIASES", idvar="sub_id", withinvar=c("Session", "Phase"), na.rm=T)
+df_task.nback_summ$run <- as.numeric(df_task.nback_summ$Phase)
+df_task.nback_summ$Session <- relevel(df_task.nback_summ$Session, "Stress")
+ggplot(df_task.nback_summ, aes(x=run, y=LIASES, color=Session, fill=Session)) +
+    geom_line() + 
+    geom_errorbar(aes(ymin=LIASES-se, ymax=LIASES+se, color=Session),size=0.5, width=0.15, na.rm=T) + 
+  ggtheme2 
+```
+<br>
+<br>
+
+##### Post-Hoc: ECN by Session {-}
+```{r}
+emtrends(models.nback_liases[[2]], identity ~ Session, var="ECN")
+#emtrends(models.nback_liases[[3]], pairwise ~ Session | Phase, var="ECN")
+```
+
+
+```{r}
+ggplot(df_task.nback_sum, aes(x=ECN, y=LIASES_z, colour=Session)) +
+  geom_smooth(method="lm", se=T) + 
+  xlab("ECN Activity") + ylab("LIASES Accuracy Score") +
+  ggtheme2  + scale_color_manual(values=stress_colors)
+```
+<br>
+
+
+
+### Memory {-}
+For the memory task, we look at the reaction time to the stimuli, split by valence, and the recognition of the images we presented them with outside the scanner. For the RT data, we will take a look at individual trials, and then for the recognition of the images we take a look at the average reposes per run or phase, depending on the model fits best. We first also remove any rts that are less than 200ms as those are just too quick, and we also rescale the RT variables. 
+```{r}
+df_task.mem <- df_task.mem %>% subset(rt>=200)
+df_task.mem$rt_z <- scale(df_task.mem$rt)
+df_task.mem$rt_s <- scales::rescale(df_task.mem$rt_z, to=c(1,6))
+```
+
+
+#### Recognition {- .tabset}
+We next look at the ability to recall the object-location associations. We first will look at overall recall, then take a look at the recall by valence associations to see if the negative or positively valent images are remembered better. First I subset the data, and make the data frame a bit longer so that we have percent correct for each of the neutral and the negative items in one column. 
+```{r}
+# Subset the neutral item correct response rates
+df_task.mem_neu <- df_task.mem %>% dplyr::select("sub_id", "Session", "Phase", "Run","run", "mem_neu_per", "DMN") %>% unique() %>% dplyr::rename(per_cor=mem_neu_per) %>% mutate(valence="neu")
+# Do the same for the negative items
+df_task.mem_neg <- df_task.mem %>% dplyr::select("sub_id", "Session", "Phase", "Run","run", "mem_neg_per", "DMN") %>% unique() %>% dplyr::rename(per_cor=mem_neg_per)  %>% mutate(valence="neg")
+# Bind them into one dataframe
+df_task.mem_cor <- rbind.data.frame(df_task.mem_neg, df_task.mem_neu)
+```
+
+Now we can also check out the distribution of the correct response rates for each of the valences to help pick the most suitable model family. We see that both valences look similar, but skewed left. 
+
+##### Hist. {-}
+```{r}
+hist(df_task.mem_neu$per_cor)
+hist(df_task.mem_neg$per_cor)
+```
+<br>
+<br>
+ 
+##### Chance Level {-}
+```{r}
+model.memory_chance <- t.test(df_task.mem$mem_tot_per, mu=0.25)
+tidy(model.memory_chance)
+```
+<br>
+<br>
+ 
+
+##### Models {- .active}
+```{r}
+# Main
+model.mem_correct <- lmer(per_cor ~ Session*Phase*valence + (1+Session*Phase|sub_id),
+                          contrasts=list(Session="contr.treatment"),
+                           data=df_task.mem_cor,
+                           control=lmerControl(calc.derivs = FALSE, optCtrl=list(maxfun=100000)) )
+#check_model(model.mem_correct)
+# Brain
+model.mem_correct_brain <- lmer(per_cor ~ Session*Phase*DMN + valence + (1+Session*Phase*DMN|sub_id),
+                                contrasts=list(Session="contr.treatment"),
+                           data=df_task.mem_cor,
+                           control=lmerControl(calc.derivs = FALSE, optimizer="bobyqa", optCtrl=list(maxfun=100000)) )
+# HTM Table
+asis_output(tab_model(model.mem_correct, model.mem_correct_brain)$knitr)
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Main {-}
+Only the valence effect sticks out, so we run a specific post-hoc test to investigate it further.
+```{r}
+emmeans(model.mem_correct,  list(pairwise ~Session*valence), by=c("Phase"), adjust = "tukey")
+```
+<br>
+<br>
+ 
+##### Plot: Main {-}
+```{r}
+df_task.mem_cor_sum <- summarySEwithin(data=df_task.mem_cor, idvar="sub_id", measurevar="per_cor", withinvars=c("Session","Phase","valence"))
+plot.mem_corr <- ggplot(df_task.mem_cor_sum, aes(y=per_cor, x=Phase, colour=valence, fill=valence, na.rm = TRUE)) +
+  geom_bar(stat="summary", alpha=.5, position=position_dodge2())+
+  geom_errorbar(aes(ymin=per_cor-se, ymax=per_cor+se), position=position_dodge(.9),size=1, width=0.45, na.rm=T) +
+  scale_y_continuous()+ scale_x_discrete()+
+  ggtitle("Picture-Location Recall")+
+  ylab("Percent Remembered\n") + 
+  ggtheme2 
+plot.mem_corr + facet_grid(.~Session)
+```
+<br>
+<br>
+ 
+##### Post-Hoc: DMN by Phase {-}
+```{r}
+emtrends(model.mem_correct_brain, pairwise ~ Phase, var="DMN") 
+```
+
+```{r}
+emmip(model.mem_correct_brain, Phase ~ DMN, cov.reduce = range) + scale_color_manual(values=stress_colors) + ggtheme2
+```
+
+<br>
+<br>
+ 
+
+#### Reaction Time {- .tabset}
+We first take a look at the reaction time. This analysis is done on a trial by trial basis. We will look at the RT between the stress and control sessions, and also look at the effects of the valence of the images on the reaction time. First we take a look at the distribution of the RT's to better inform us of which model family would fit best. It appears here that we have a significant effect of valence on reaction times. So participants are faster in responding.
+
+##### Hist. {-}
+```{r}
+hist(df_task.mem$rt)
+```
+<br>
+<br>
+ 
+##### Models {- .active}
+```{r}
+# Main
+model.memory_rt <- glmer(rt_s ~ Session*Phase + Session*valence +Session*Phase*valence + (1+Session*Phase|sub_id),
+                         contrasts=list(Session="contr.treatment"),
+                        data=df_task.mem,
+                        family=Gamma("inverse"),
+                       control=glmerControl(calc.derivs=FALSE))
+# Brain
+model.memory_rt_brain <- glmer(rt_s ~ Session*Phase*DMN + (1+Session*Phase*DMN|sub_id),
+                               contrasts=list(Session="contr.treatment"),
+                        data=df_task.mem,
+                       family=Gamma("identity"),
+                       control=glmerControl(calc.derivs=FALSE, optimizer="bobyqa", optCtrl=list(maxfun=100000)))
+# HTML Output
+asis_output(tab_model(model.memory_rt, model.memory_rt_brain)$knitr)
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Main {-}
+```{r}
+emmeans(model.memory_rt,  list(pairwise ~ Session*Phase), by=c("Phase"), adjust = "tukey")
+```
+<br>
+<br>
+ 
+
+##### Plot: Main {-}
+```{r}
+df_task.mem_sum <- summarySEwithin(df_task.mem, measurevar="rt",idvar="sub_id", withinvars= c("Session","Phase","valence"))
+df_task.mem_sum$run = as.numeric((df_task.mem_sum$Phase))
+df_task.mem_sum$valence <- relevel(df_task.mem_sum$valence, "negative")
+plot.mem_rt <- ggplot(df_task.mem_sum, aes(x=run, y=rt, colour=valence)) + 
+                          geom_line() +
+                          geom_errorbar(aes(ymin=rt+se, ymax=rt-se),width=0.2, na.rm=TRUE) + 
+                          scale_x_continuous(breaks=c(1,2), labels = c("Early", "Late")) + 
+                          ggtheme2  
+plot.mem_rt + facet_grid(.~Session)
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Brain {-}
+```{r}
+joint_tests(model.memory_rt_brain, by=c("Session","Phase"))
+ggplot(df_task.mem, aes(x=DMN, y=rt_s, colour=Session)) + geom_smooth(method="lm") + ggtheme2 +  facet_grid(.~Phase) + scale_color_manual(values=stress_colors)
+```
+<br>
+<br>
+ 
+
+### Oddball {-}
+The oddball data has already been processed, theres not much more we need to do there. Therefore, we can begin with the stats. 
+
+
+#### d-Prime {- .tabset}
+
+##### Hist. {-}
+```{r}
+hist(df_task.odd$dprime)
+```
+<br>
+<br>
+ 
+##### Models {- .active}
+```{r}
+# Signals
+signals=c("", "SN" )
+# Run in parallel function
+models.odd_dprime <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="dprime",  
+                                               iv=ifelse(X=="",  "Session*Run", "1+Session*Run*"), 
+                                               re=ifelse(X=="",  "1+Session+Run", paste("1+Session+Run")), 
+                                               sub_id="sub_nr", 
+                                               fam="lmer", 
+                                               data=df_task.odd)}, mc.cores=5)
+# Print HTML Output
+asis_output(tab_model(models.odd_dprime, dv.labels = c("Signal", "Signal ~ SN"), show.stat =T, show.se=T)$knitr)
+```
+<br>
+<br>
+ 
+##### Plot: Main {-}
+```{r}
+plot.odd_sess <- ggplot(df_task.odd, aes(x=Scan, y=dprime, colour=Scan, fill=Scan)) + 
+    geom_violin(alpha=0.5) + 
+    geom_boxplot(width=0.1, alpha=0.2) +
+    geom_hline(yintercept=0, colour="grey") +
+    ggtheme2
+plot.odd_sess
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Brain {-}
+```{r}
+joint_tests(models.odd_dprime[[2]], by=c("Session", "Run"))
+```
+<br>
+<br>
+ 
+
+#### Hits {- .tabset}
+
+##### Hist. {-}
+We first check the hits. It appears that there is a significant difference in the hit-rate between the two sessions, and between the runs.
+```{r}
+hist(df_task.odd$odd_hits)
+```
+<br>
+<br>
+ 
+##### Models {- .active}
+```{r}
+# Contrasts to investigate
+signals=c("", "SN")
+# Run in parallel function
+models.odd_hits <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="odd_hits",  
+                                               iv=ifelse(X=="",  "Session*Run", "1+Session*Run*"), 
+                                               re=ifelse(X=="",  "1+Session+Run", paste("1+Session+Run")), 
+                                               sub_id="sub_nr", 
+                                               fam="lmer", 
+                                               data=df_task.odd)}, mc.cores=5)
+
+# Print HTML Output
+asis_output(tab_model(models.odd_hits, dv.labels = c("Signal", "Signal ~ SN"), show.stat =T, show.se=T)$knitr)
+```
+<br>
+<br>
+ 
+##### Plot: Main {-}
+```{r}
+plot.odd_hits <- ggplot(df_task.odd, aes(x=Scan, y=odd_hits, colour=Scan, fill=Scan)) + 
+    geom_violin(alpha=0.5) + 
+    geom_boxplot(width=0.1, alpha=0.2) +
+    ggtheme2
+plot.odd_hits 
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Brain {-}
+```{r}
+joint_tests(models.odd_hits[[2]], by=c("Session", "Run")) 
+```
+<br>
+<br>
+ 
+#### False Alarms {- .tabset}
+We also see that they perform more errors. So we have decreased hits, and more errors in the stress session 
+
+
+##### Models {- .active}
+```{r}
+# MLoop over
+signals=c("", "SN")
+# Run in parallel function
+models.odd_fas <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="odd_FA",  
+                                               iv=ifelse(X=="",  "Session*Run", "1+Session*Run*"), 
+                                               re=ifelse(X=="",  "1+Session+Run", paste("1+Session+Run")), 
+                                               sub_id="sub_nr", 
+                                               fam="lmer", 
+                                               data=df_task.odd)}, mc.cores=5)
+# HTML Output
+tab.odd_fas <- tab_model(models.odd_fas, show.se=T, show.stat=T, dv.labels=c("Signal", "Signal ~ SN"))
+asis_output(tab.odd_fas$knitr)
+```
+<br>
+<br>
+ 
+
+##### Plot: Main {-}
+```{r}
+plot.odd_fas <- ggplot(df_task.odd, aes(x=Scan, y=odd_FA, colour=Scan, fill=Scan)) + 
+    geom_violin(alpha=0.5) + 
+    geom_boxplot(width=0.1, alpha=0.2) +
+    ggtheme2
+plot.odd_fas
+```
+<br>
+<br>
+ 
+
+##### Post-Hoc: SN by Session {-}
+```{r}
+emtrends(models.odd_fas[[2]], pairwise ~ Session, var="SN")
+joint_tests(models.odd_fas[[2]], by=c("Session"))
+```
+```{r}
+plot.sn_fas <- ggplot(df_task.odd, aes(x=SN, y=odd_FA, colour=Session, fill=Session)) + 
+  geom_smooth(method="lm", formula="y~x", alpha=0.15) + 
+  #geom_point(alpha=0.5)+
+  scale_color_manual(values=stress_colors) +  scale_fill_manual(values=stress_colors) + 
+  ylab("False Alarms") +
+  ggtheme2
+plot.sn_fas + facet_grid(~Run)
+```
+
+
+<br>
+<br>
+ 
+
+#### dPrime by Valence {- .tabset}
+Now we take a look at the effects of stress and valence on recall. So we do something similar here to what we did before, where we split the positive and negative values, and then merge them into a long data frame(same as we did for the memory task recognition trials).
+```{r}
+# Subset the neutral item correct response rates
+df_task.odd_pos <- df_task.odd %>% dplyr::select("sub_nr", "Session", "Run", "Scan","dprime_pos", "SN", "ECN", "SN_ECN") %>% unique() %>% dplyr::rename(dprime=dprime_pos) %>% mutate(Valence="Positive")
+# Do the same for the negative items
+df_task.odd_neg <- df_task.odd %>% dplyr::select("sub_nr", "Session", "Run", "Scan","dprime_neg", "SN", "ECN", "SN_ECN") %>% unique() %>% dplyr::rename(dprime=dprime_neg) %>% mutate(Valence="Negative")
+# Bind them into one dataframe
+df_task.odd_val <- rbind.data.frame(df_task.odd_pos, df_task.odd_neg)
+```
+
+##### Models {- .active}
+```{r}
+# Loop over these
+signals=c("", "SN")
+# Run in parallel function
+models.odd_val <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X, 
+                                               dv="dprime",  
+                                               iv=ifelse(X=="",  "Session*Run*Valence", "1+Session*Run*Valence*"), 
+                                               re=ifelse(X=="",  "1+Session+Run", paste("1+Session+Run")), 
+                                               sub_id="sub_nr", 
+                                               fam="lmer", 
+                                               data=df_task.odd_val)}, mc.cores=5)
+
+# Print HTML Output
+asis_output(tab_model(models.odd_val, 
+                      dv.labels = c("Signal", "Signal ~ SN"),
+                      show.stat =T, show.se=T)$knitr)
+```
+<br>
+<br>
+ 
+##### Plot: Main {-}
+```{r}
+plot.odd_valence <- ggplot(df_task.odd_val, aes(x=Scan, y=dprime, colour=Scan, fill=Scan)) + 
+    geom_violin(alpha=0.5) + 
+    geom_boxplot(width=0.1, alpha=0.2) +
+    geom_hline(yintercept=0, colour="grey") +
+    ggtheme2
+plot.odd_valence + facet_grid(. ~ Valence)
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Brain {-}
+```{r}
+joint_tests(models.odd_val[[2]], by=c("Session", "Run")) 
+```
+<br>
+<br>
+ 
+
+#### Hit+Miss Joint Plot {-}
+```{r, fig.height=5, fig.width=5}
+plot.odd_results <- ggarrange(
+  ggarrange(ggarrange(NULL, (plot.odd_sess + xlab("") + labs(color="", fill="") + ylab("dPrime (a.u.)") + theme(axis.text.x=element_blank()) ),
+                      NULL, (plot.odd_hits + xlab("") + ylab("Hits (count)")+theme(axis.text.x=element_blank()) ), 
+                      NULL, (plot.odd_fas + xlab("") + ylab("False Alarms (count)")+theme(axis.text.x=element_blank()) ), 
+                      ncol=6, common.legend = T, legend="bottom", widths=c(0.05, 1, 0.05, 1, 0.05, 1), labels =c("A", "", "B", "", "C")),
+  (plot.sn_fas+ylab("False Alarms (count)")+xlab("SN Activity (a.u.)")), nrow=2, legend="bottom", labels=c("", "D")))
+
+```
+```{r}
+plot.odd_results
+ggsave("figures/Figure_5_OddBeh.svg", device="svg", dpi =300, width=5, height = 6)
+```
+
+
+#### RT {- .tabset}
+```{r}
+df_task.oddrt <- df_task %>% subset(task==1 & valence==0 & rt!=0) %>% subset(rt>200) 
+df_task.oddrt$valence <- (str_split_fixed(df_task.oddrt$stimulus, pattern="_", n =3))[,2]
+```
+
+##### Models {- .active}
+```{r}
+# Ma
+signals=c("", "SN")
+models.odd_rts <- mcmapply(signals, FUN=function(X){fx.par_model(signal=X,
+                                               dv="rt",
+                                               iv=ifelse(X=="",  "Session*Phase", "1+Session*Phase*"),
+                                               re=ifelse(X=="",  "1+Session*Phase", paste("1+Session*Phase+", X, sep="")),
+                                               sub_id="sub_id",
+                                               fam=Gamma("log"),
+                                               data=df_task.oddrt)}, mc.cores=5)
+
+# Print HTML Output
+asis_output(tab_model(models.odd_rts, dv.labels = c("Signal", "Signal ~ SN"), show.stat =T, show.se=T)$knitr)
+```
+<br>
+<br>
+ 
+
+##### Post-Hoc: Main {-}
+```{r}
+emmeans(models.odd_rts[[1]],  list(pairwise ~Session*Phase), by=c("Phase"), adjust = "tukey")
+```
+<br>
+<br>
+ 
+##### Plot: Main {-}
+```{r}
+df_task.oddrt_summ <- summarySEwithin(df_task.oddrt,idvar="sub_id", measurevar="rt", withinvars =c("Session", "Phase"))
+df_task.oddrt_summ$Phase <- as.numeric(as.factor(df_task.oddrt_summ$Phase))
+df_task.oddrt_summ$Session <- relevel(df_task.oddrt_summ$Session, "Stress")
+ggplot(df_task.oddrt_summ, aes(x=Phase, y=rt, color=Session, fill=Session)) +
+    geom_line() + 
+    geom_errorbar(aes(ymin=rt-se, ymax=rt+se, color=Session),size=1, width=0.15, na.rm=T)+ 
+  ggtheme2 + scale_x_continuous(breaks=c(1,2,3,4,5,6)) 
+```
+<br>
+<br>
+ 
+##### Post-Hoc: Brain {-}
+```{r}
+joint_tests(models.odd_rts[[2]], by=c("Session", "Phase"), adjust="none")
+```
+
+
+##### Mediation {-}
+```{r}
+library(mediation)
+mediation.med <- lme4::lmer(SN ~ Session*Phase + (1|sub_nr), data=df_task.oddrt, REML=F)
+mediation.main <- lme4::lmer(log10(rt) ~ Session*Phase + SN + (1|sub_nr), data=df_task.oddrt, REML=F)
+mediation.analysis <- mediate(model.m=mediation.med, model.y=mediation.main, treat ="Session", control.value="Control", mediator = "SN", sims=5000)
+summary(mediation.analysis)
+```
+
+#### FA by RT {-.tabset}
+
+##### Models {-}
+```{r}
+df_task.odd_rt_fa <- df_task.oddrt %>% dplyr::group_by(sub_nr, Session, Phase) %>% dplyr::summarise(rt=mean(rt)) %>% dplyr::rename(Run=Phase) %>% ungroup() %>% merge(., df_task.odd, by=c("sub_nr", "Session", "Run"))
+
+model.odd_fa_rt <- lmer(rt ~ Session*Run*odd_FA + (1+Session+Run|sub_nr) , 
+                        data=df_task.odd_rt_fa, 
+                        contrast=list(Session="contr.treatment"), 
+                        control=lmerControl(calc.derivs = F, optimizer="bobyqa", optCtrl=list(maxfun=100000)))
+asis_output(tab_model(model.odd_fa_rt)$knitr)
+check_model(model.odd_fa_rt)
+#Gaus 2670 #GausLog 3336.29 # Gamma 7770 #Gamma Log
+
+```
+
+##### Post-Hoc {-}
+```{r}
+joint_tests(model.odd_fa_rt, by=c("Session", "Run"), adjust="none")
+```
+
+
+##### Plot {-}
+```{r}
+emmip(model.odd_fa_rt, Session + Run ~ odd_FA, cov.reduce = range)+ ggtheme2# + scale_color_manual(values=stress_colors) 
+```
+
+
+
+
+```{r}
+rcorr(df_task.odd_rt_fa$rt, df_task.odd_rt_fa$odd_FA)
+plot.odd_fa_rt <- ggplot(df_task.odd_rt_fa, aes(x=odd_FA, y=rt)) + geom_smooth(method="lm" )
+plot.odd_fa_rt + facet_grid(Session~Run)
+```
+
+
+# System Info
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+

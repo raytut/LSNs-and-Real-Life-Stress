@@ -1,0 +1,212 @@
+##################################################################################
+#																											#
+#  									 RETRIEVAL TASK												#
+#																											#
+#																											#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 	Retrieval Task Order from Text File
+#--------------------------------------------------------------------------------#
+
+## Stimulus Text File
+string MemStimulusSet = "trial_ret_sub" + string(subjnr) + "_s" + string(session) + "_r"+ string(run)+".txt";
+input_file ret_stimset = new input_file;
+
+## Make Empty Arrays for Text-File Setting
+array <string> ret_stimname [1][ret_n_trials];	   #bitmap names
+array <int> ret_stimcat [1][ret_n_trials];			#stimulus valence (1:2)
+array <int> ret_stimloc [1][ret_n_trials];			#associated locations 
+array <int> ret_isitime [1][ret_n_trials];			#ISI time
+
+## Stimfile is located in randlist folder
+ret_stimset.open( ("trials_mem\\" + MemStimulusSet));								
+
+## Load Information From Text File
+int ret_counter = 1;				
+loop until																								
+   ret_counter > ret_n_trials														
+begin
+	ret_stimname[1][ret_counter] = ret_stimset.get_string();
+	ret_stimcat[1][ret_counter] = ret_stimset.get_int();
+	ret_stimloc[1][ret_counter] = ret_stimset.get_int();
+	ret_isitime[1][ret_counter] = ret_stimset.get_int();
+	ret_counter = ret_counter + 1;
+end; 
+
+## Load Bitmaps Into Array
+array <bitmap> ret_stimbitmap [1][ret_n_trials];
+loop int i = 1 until i > ret_n_trials 
+begin
+   ret_stimbitmap [1] [i]=new bitmap(ret_stimname[1][i]);
+	ret_stimbitmap [1] [i].load();
+   i = i + 1;
+end;
+
+
+#--------------------------------------------------------------------------------#
+# 										Retrieval Task 												#
+#--------------------------------------------------------------------------------#
+
+
+## Initialize everything needed for trial (viewing)##
+int begin_isi;					#begin isi
+int dur_isi = 0;				#duration isi from stimfile
+int begin_bmp_center;      #begin picture at center of screen
+int dur_bmp_center = 3400;	#show the picture at center (before target) %duration encoding = 3400 (incl. movement)
+int end_bmp_center;
+int dur_trial;
+
+int begin_break;
+int dur_break = 6000;		#show a break for 25 seconds
+int end_break;
+int time_break;
+bool makebreak = false;
+
+## Initialize everything needed for trial (trial stages)##
+int stage;
+bool clock_setting = false;
+array<int> xloc_targets[4] = { -280,-280,  280,  280}; 
+array<int> yloc_targets[4] = { -200, 200, 200,  -200};
+int current_stim;							#counts through trials and breaks
+int trialcounter;							#counts through trial list
+int totalcount = ret_n_trials; 		#nr of trials
+int startloop = clock.time();
+
+
+#--------------------------------------------------------------------------------#
+# 											Subroutines 												#
+#--------------------------------------------------------------------------------#
+
+## Show_fixationcross_loc##
+sub show_fixationcross_loc
+begin
+	pic_locations.set_part( 1, circle_white); 
+   pic_locations.set_part( 2, circle_white); 
+   pic_locations.set_part( 3, circle_white); 
+   pic_locations.set_part( 4, circle_white); 
+   pic_locations.set_part( 5, RPLstudy_fixationcross); 
+   pic_locations.set_part_x ( 5, 0);
+   pic_locations.set_part_y ( 5, 0);
+end;
+
+## Show bmp at center
+sub show_bmp_center (int k)
+begin
+   pic_locations.set_part( 5, ret_stimbitmap[1][k]);
+	sStimPic = ret_stimname[1][k];
+   pic_locations.set_part_x ( 5, 0);
+   pic_locations.set_part_y ( 5, 0);
+end;
+
+## Show target at correct location
+sub show_target (int k)
+begin
+	pic_locations.add_part(circle_green,xloc_targets[k],yloc_targets[k])
+end; 
+
+## Remove picture part
+sub remove_stimulus (int pic_part)
+begin
+   pic_locations.set_part(pic_part,mask);    
+end;
+
+#--------------------------------------------------------------------------------#
+# 										Retrieval Task Loop 											#
+#--------------------------------------------------------------------------------#
+
+## Retrival Subroutine
+int ret_trialcounter=1;
+sub ret_subroutine (int k)
+begin
+	
+	# Log
+	iBlockOn = clock.time();
+	
+	# Loop: Show Fix, then Stim
+	loop current_stim=1; trialcounter=1; stage=1; clock_setting=false; until current_stim > 3  
+	begin
+		#Set locations
+		pic_locations.set_part_x ( 1, -280); #location 1, lower left
+		pic_locations.set_part_y ( 1, -200);
+		pic_locations.set_part_x ( 2, -280); #location 2, top left
+		pic_locations.set_part_y ( 2, 200);
+		pic_locations.set_part_x ( 3, 280);  #location 3, top right
+		pic_locations.set_part_y ( 3, 200);
+		pic_locations.set_part_x ( 4, 280);	 #location 4, lower right
+		pic_locations.set_part_y ( 4, -200);
+		xloc_targets = { -280,-280,  280,  280};  
+		yloc_targets = { -200, 200, 200,  -200};
+		
+		#STAGE 1: show fixationcross for dur_isi##
+		if (stage == 1) then
+			if clock_setting == false then 
+				show_fixationcross_loc(); 	
+				trial_locations.present();
+				begin_isi = clock.time();  			#starttime of isi
+				dur_isi = 9000-(ret_isitime[1][ret_trialcounter]); #duration of isi from stimfile
+				clock_setting = true;					#start checking time
+			end;   											#show until time is up
+			if clock.time() >= begin_isi + dur_isi then 
+				clock_setting = false;					#stop checking time
+				stage = 2;  								#go to next stage
+			end;
+
+		#STAGE 2: show bmp and locations dur_bmp_loc_view##
+		elseif (stage == 2) then
+			if clock_setting == false then
+				
+				# Send Eye Tracker + Show picture through Subroutine
+				oport.send_code(40);
+				show_bmp_center(ret_trialcounter);		
+				
+				# Start time of picture + Log
+				begin_bmp_center = clock.time();
+				dur_bmp_center= (ret_isitime[1][ret_trialcounter]);
+				iStimOn = clock.time();	
+				
+				## Ask for responses	
+				resp = 0; RT = 0; pressed = 0;
+				loop 
+				until clock.time() >= begin_bmp_center + dur_bmp_center
+				begin
+					trial_locations.present(); 		
+					if (response_manager.response_count() == 1) then		
+						if pressed == 0 then				#if no buttonpress, keep checking response
+							pressed = 1;
+							resp = response_manager.last_response();
+							RT = (response_manager.last_response_data().time()) - begin_bmp_center;
+							show_target(resp); 			#show green circle at last response	
+							trial_locations.present(); #present trial
+						else
+						end;
+					end;
+				end;
+				clock_setting = true;	  
+			end;
+			end_bmp_center = clock.time();
+			
+			## Remove Picture
+			remove_stimulus(5);	
+			
+			## Log
+			iStimOff = clock.time();
+			iValence = ret_stimcat[1][ret_trialcounter];
+			iCorrectLocation = ret_stimloc[1][ret_trialcounter];
+			dur_trial = end_bmp_center-begin_bmp_center;
+			WriteToOutputFile (sMRILogFileDir);
+			
+			## Removes Green Circle if Button Pressed
+			if pressed == 1 then
+				pic_locations.remove_part(6);	
+			end;
+			
+			## Reset Trial
+			ret_trialcounter = ret_trialcounter + 1;
+			current_stim = current_stim + 1;
+			stage = 1;
+			clock_setting = false;
+			end;						
+		end;
+	iBlockOff=clock.time();
+end;

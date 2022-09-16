@@ -1,0 +1,432 @@
+##################################################################################
+#																											#
+#									ALL STIMULUS DEFINITIONS										#
+#																											#
+#																											#
+#																											#
+# 		This file contains all the stimulus definitions sorted by each of the 		#
+#							tasks that are used in the EMA study								#
+#																											#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+#  									GENRAL DEFINTIONS	 											
+#--------------------------------------------------------------------------------#
+
+## Default screen
+picture { } default;		
+
+## Fixation Cross
+picture {text{caption="+";font_size=32;font_color=255,255,255;}fixx; x=0; y=0;
+}fixationcross;
+
+## Fixation Dot
+picture {ellipse_graphic {ellipse_width = 10; ellipse_height = 10; color = 250, 250, 250;rotation = 30; }ellipse1;x = 0; y = 0;
+}fixationdot;
+
+## Used by Subroutine "showtext" to Put Text On Screen
+picture {text {caption = " "; font_size = 16;} tos1; x = 0; y = 0;
+}textonscreen;
+
+## Circle for Oddball Trials
+picture {ellipse_graphic {ellipse_width= 120; ellipse_height= 120; color= 250,250,250; rotation=30;}ellipse2;x=0; y=0;
+} circle;
+
+## Square for NBack Trials
+picture {box {height=120; width = 120; color = 250,250,250;}box1; x=0; y=0;
+}square;
+
+## Triangle for Memory Trials
+picture {polygon_graphic {sides=3; radius=120; line_color=250,250,250;fill_color = 250,250,250;}polygon1; x=0; y=0;
+}triangle;
+
+## Used by GetKeyboardInput Subroutine
+picture {text {caption=" "; font_size=20;}t_Text1; x=0; y=0;
+			text {caption=" "; font_size=20;}t_Text2; x=0; y=-35;
+	}p_Text;
+	
+## Waiting for Scanner
+picture {text {caption= "Wachten op scanner...." ;}; x=0; y=0;
+} pic_wachten;
+
+## Thank you Screen
+picture { text {caption= "Dit is het einde van de taak.\n\n Bedankt!" ; }; x=0; y=0; 
+} pic_bedankt;
+
+## Practice Instructions
+picture {text {caption = 
+	"Je gaat nu oefenen met de taakjes die je in de scanner zult doen.\n\n
+	Voordat een nieuwe taak begint, krijg je een vormpje te zien.
+	Dit vormpje vertelt je wat voor soort taak je gaat doen.\n\n
+	Probeer te onthouden welk vormpje bij welke taak hoort.
+	In de scanner zal dit helpen om je op de taak voor te bereiden,
+	zonder dat je telkens instructies of tekst te zien krijgt.\n\n
+	Druk op een toets om door te gaan.";
+	font_color=255,255,255;};x=0;y=0;
+} practice_instructions_1;
+
+## fMRI Instructions
+picture {text {caption = 
+	"Je gaat zo beginnen met de taakjes in de scanner.\n\n
+	Voordat een taakje begint, zie je telkens één van de vormpjes
+	die je als het goed is nog kent van de oefening.\n\n
+	Hierdoor weet je telkens welk taakje er gaat komen.\n\n
+	Het komende onderdeel zal ongeveer 12 minuten duren.\n\n
+	Druk op een toets om door te gaan.";
+	font_color=255,255,255;};x=0;y=0;
+} fmri_instructions_1;
+
+picture {text {caption = 
+	"Je gaat zo beginnen aan het volgende onderdeel.\n\n
+	Dit onderdeel is hetzelfde als de vorige onderdelen,
+	en het zal weer ongeveer 12 minuten duren.\n\n
+	Als je klaar bent om te beginnen, druk dan op een toets.";
+	font_color=255,255,255;};x=0;y=0;
+} fmri_instructions_2;
+
+picture {text {caption = 
+	"Voor de volgende taak vragen we je om te fixeren op het kruis.\n\n
+	Gedurende deze tijd vragen we je ook om niet na te denken
+	en je gedachten te laten afdwalen.\n\n 
+	Deze taak duurt ongeveer vijf minuten.\n\n
+	Druk op een knop om door te gaan.";
+	font_color=255,255,255;};x=0;y=0;
+} fmri_instructions_resting_state;
+
+
+#--------------------------------------------------------------------------------#
+#  ODDBALL														
+#--------------------------------------------------------------------------------# 
+
+## Stimulus Picture
+picture {bitmap {filename = "odd_neu_1.bmp";} sp1; x = 0; y = 0;
+}stimpic1;
+
+## Instructions for Oddball
+picture {text {caption = 
+	"In de komende taak krijg je in snel tempo
+	een aantal gezichten te zien.\n\n
+	Je taak is om op een toets naar keuze te drukken
+	wanneer het gezicht een emotionele uitdrukking heeft.\n\n
+	Als je klaar bent om te beginnen, druk dan op een toets.";
+	font_color=255,255,255;};x=0;y=0;
+}odd_instructions_1;
+
+## Trials for Oddball
+trial {trial_duration = 200; all_responses = true;
+	stimulus_event 
+		{picture {bitmap sp1; x =0; y =0;} odd_pic; time = 0; duration = 200;} event44;
+} trial_oddball;
+
+
+
+#--------------------------------------------------------------------------------#
+#  Oddball Recall Definitions								
+#--------------------------------------------------------------------------------#
+
+## To Be Used By Oddball Recall
+picture {text {caption=
+	"In de komende taak krijg je een serie gezichten
+	te zien die je wel of niet eerder zag in de vorige taak.\n\n
+	Je taak is om aan te geven hoe zeker je bent dat je
+	het gezicht wel of niet eerder hebt gezien.\n\n 
+	Je geeft dit aan op een schaal van 1 tot 6.\n
+	1 staat voor “zeker niet gezien”.
+	6 staat voor “zeker wel gezien”.\n
+	Druk op een toets tussen 5 om te beginnen.\n\n";};x=0; y=0;
+}oddrec_instructions;
+
+
+picture {text {caption =
+"In the next task, you will see a series of 
+different faces that you may or may not have seen 
+in the first task you did today.\n
+You will need to rate the faces using the keys 1 to 6\n
+1= Not Seen\n
+6= Seen\n
+Press 5 when ready to proceed";}; x=0; y=0;
+}oddrec_instructions_eng;
+
+picture {text {caption = "+"; font_size=18;} word_text2; x= 0; y=	150;
+            text {caption = "Heel zeker\nniet gezien"; font_size=18;} 		opt_7; x=-425; y=-250;
+            text {caption = "Vrij zeker\nniet gezien"; font_size=18;}     	opt_8; x=-265; y=-250;
+            text {caption = "Beetje zeker\nniet gezien"; font_size=18;} 	opt_9; x=-100; y=-250;
+            text {caption = "Beetje zeker\nwel gezien"; font_size=18;}  	opt_10; x=100; y=-250;
+            text {caption = "Vrij zeker\nwel gezien"; font_size=18;}    	opt_11; x=265; y=-250;
+            text {caption = "Heel zeker\nwel gezien"; font_size=18;}    	opt_12; x=425; y=-250;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle1;x=-425; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle2;x=-265; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle3;x=-100; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle4;x=100; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle5;x=265; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle6;x=425; y=-180;
+}opt_circles;
+
+
+picture {bitmap { filename = "mem_neg_1.bmp"; } face_pic; x = 0; y = 150;
+            text {caption = "Heel zeker\nniet gezien"; font_size=18;} 		opt_o7; x=-425; y=-250;
+            text {caption = "Vrij zeker\nniet gezien"; font_size=18;}     	opt_o8; x=-265; y=-250;
+            text {caption = "Beetje zeker\nniet gezien"; font_size=18;} 	opt_o9; x=-100; y=-250;
+            text {caption = "Beetje zeker\nwel gezien"; font_size=18;}  	opt_o10; x=100; y=-250;
+            text {caption = "Vrij zeker\nwel gezien"; font_size=18;}    	opt_o11; x=265; y=-250;
+            text {caption = "Heel zeker\nwel gezien"; font_size=18;}    	opt_o12; x=425; y=-250;
+				
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle01;x=-425; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle02;x=-265; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle03;x=-100; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle04;x=100; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle05;x=265; y=-180;
+            ellipse_graphic {ellipse_width= 40; ellipse_height= 40; color= 250,250,250; rotation=30;}opt_circle06;x=425; y=-180;
+}opt_oddball;
+
+## Oddball Trial
+trial {trial_duration = 1000; all_responses = false;
+	stimulus_event 
+		{picture opt_oddball; time = 0;} event_oddret;
+}trial_oddret;
+
+## Oddball Fixation Trial
+trial {trial_duration = 1999; all_responses = false;
+	stimulus_event {picture opt_circles; time = 0;} event_fixx;
+}trial_fixx;
+
+## Response On Trial
+trial {trial_duration = 1; all_responses = true;
+}trial_button_on;
+
+## Response Off Trial
+trial {trial_duration = 1; all_responses = false;
+}trial_button_off;
+
+
+#--------------------------------------------------------------------------------#
+#  NBACK			 												
+#--------------------------------------------------------------------------------#
+
+## Number Array
+array {
+	text { caption = "1"; font_size=40;font_color=250,250,250; description = "1"; } text1;
+	text { caption = "2"; font_size=40;font_color=250,250,250; description = "2"; };
+	text { caption = "3"; font_size=40;font_color=250,250,250; description = "3"; };
+	text { caption = "4"; font_size=40;font_color=250,250,250; description = "4"; };
+	text { caption = "5"; font_size=40;font_color=250,250,250; description = "5"; };	
+} numbers;
+
+## Trial for nBack
+trial {
+	trial_duration = 380; all_responses = true;
+	stimulus_event {picture {text text1; x =0; y =0;} pic; time = 0; duration = 380;} event33;
+} nback;
+
+## nBack Instructions
+picture {text {caption = 
+	"In deze taak krijg je een serie van cijfers te zien,
+	die één voor één gepresenteerd worden.\n
+	Je taak is om telkens aan te geven wanneer het
+	cijfer dat je ziet hetzelfde is als 2 cijfers geleden.\n
+	Voorbeeld, in de volgende serie:\n
+	1, 2, 1, 1, 4, 3, 4\n
+	Geef je twee maal een respons. Namelijk:
+	Bij de tweede keer ‘1’, en de tweede keer ‘4’.\n
+	Je reageert dus niet bij de derde keer ‘1’.\n
+	Je kunt reageren met elke toets.\n\n
+	Als je klaar bent om te beginnen, druk dan op een toets.";
+	font_color=255,255,255;};x=0;y=0;
+}nback_instructions_1;
+
+
+#--------------------------------------------------------------------------------#
+#	MEMORY		 											
+#--------------------------------------------------------------------------------#
+
+## Memory Task Fixationcross
+bitmap { filename = "RPLstudy_fixationcross.bmp"; } RPLstudy_fixationcross;
+			picture { bitmap RPLstudy_fixationcross; x = 0; y = 0; 
+} pic_fixationcross;  
+
+## Show a BREAK
+picture {text {caption= "*****" ; }; x=0; y=0;
+} pic_pause;
+
+## Screen for locations
+bitmap { filename = "RPLstudy_circle_white.bmp"; }	circle_white;	#location circles are in white
+bitmap { filename = "RPLstudy_circle_green.bmp"; }	circle_green;  #target circle is in green
+bitmap { filename = "RPLstudy_mask.bmp"; } mask; 						#grey mask
+picture {          							
+			bitmap mask; x = -340; y = -260;         			#index 1: location 1, lower left
+         bitmap mask; x = -340; y = 260;          			#index 2: location 2, top left    
+			bitmap mask; x = 340; y = 260;           			#index 3: location 3, top right
+         bitmap mask;x = -340; y = 260;         			#index 4: location 4, lower right
+			bitmap RPLstudy_fixationcross;x = 0; y = 0;	 	#index 5: fixationcross 		
+} pic_locations;
+
+
+
+#--------------------------------------------------------------------------------#
+# 	Encoding Instructions																								
+#--------------------------------------------------------------------------------#
+
+picture {text {caption= 
+	"\n LEER FASE\n 
+	Tijdens deze taak zul je verschillende plaatjes te zien krijgen
+	die horen bij 1 van de 4 mogelijke locaties op het scherm.\n
+	Elk plaatje is geassocieerd met 1 specifieke locatie.\n\n
+	De plaatjes worden eerst gepresenteerd in het midden van het scherm en
+	zullen bewegen naar de bijbehorende locatie.\n\n
+	Jouw taak is om de locaties van de verschillende plaatjes te onthouden.
+	Je hoeft niks anders te doen.\n\n
+	Als je nog vragen hebt dan kun je die nu stellen.
+	Als alles duidelijk is, kun je een knop indrukken om verder te gaan.";}; 
+	x=0; y=50;     
+}pic_encoding1;
+
+
+picture {text {caption= 
+	"Er worden in totaal 63 plaatjes getoond.\n\n
+	Na 32 plaatjes volgt er steeds een korte pauze van 25 seconden.
+	Deze pauzes zijn aangegeven met asterisks ***** op het scherm.\n\n
+	Tijdens deze pauzes kun je even ontspannen.\n\n
+	De locaties zullen weer verschijnen zodra de taak verder gaat.\n\n
+	Als je nog vragen hebt dan kun je die nu stellen.
+	Als alles duidelijk is, kun je een knop indrukken om verder te gaan.";}; x=0; y=50;     
+} pic_breakinstruction;
+
+
+picture {text {caption=
+	"Deze taak zal ongeveer 10 minuten duren.\n\n
+	Succes!\n\n
+	De taak zal beginnen na dit scherm.\n
+	Druk op een knop om door te gaan.";}; 
+	x=0; y=50; 
+}pic_start;
+
+#--------------------------------------------------------------------------------#
+#  Retrieval Instructions 																								
+#--------------------------------------------------------------------------------#
+
+## Retrieval Instructions
+picture {text {caption= 
+	"\n TEST FASE\n
+	Tijdens deze taak is het de bedoeling dat je alle plaatje-locatie associaties
+	die je net geleerd hebt probeert te herinneren.\n\n
+	Zodra er een plaatje op het scherm verschijnt, kun je de locatie aangeven
+	waar jij denkt dat het plaatje hoort.\n\n
+	Dit doe je door op de bijbehorende knop te drukken.\n\n
+	Probeer zo snel, maar ook zo correct mogelijk te antwoorden.\n\n
+	Elk plaatje zal 3 seconden te zien zijn en je dient binnen deze tijd te reageren.\n\n
+	Als je nog vragen hebt dan kun je die nu stellen.
+	Als alles duidelijk is kun je een knop indrukken om verder te gaan.";};
+	x=0; y=50;     
+}ret_instruction_1;
+
+## Button Instructions
+picture {text {caption=
+	"\n
+	Zorg ervoor dat je je vingers goed op de knoppen hebt. \n\n
+	linker wijsvinger = linksonder \n\n
+	linker middelvinger = linkboven \n\n
+	rechter middelvinger = rechtsboven \n\n
+	rechter wijsvinger = rechtsonder \n\n
+	Druk op een knop om door te gaan." ;};
+	x=0; y=50;     
+}ret_instruction_2;
+
+
+#--------------------------------------------------------------------------------#
+# 	Memeory Trials																						
+#--------------------------------------------------------------------------------#
+
+
+## Encoding Welcome
+trial {trial_duration = forever;
+		trial_type = first_response;
+		all_responses = false;
+		picture pic_encoding1;
+		target_button = 1;
+		code = "welkom1";
+} trial_encoding_welkom1;
+
+trial {
+	trial_duration = forever;
+	trial_type = first_response;
+	all_responses = false;
+	picture ret_instruction_1;
+	target_button = 1;
+	code = "welkom2";
+} trial_test_welkom1;
+
+## Trial Buttons
+trial {
+	trial_duration = forever;
+	trial_type = first_response;
+	all_responses = false;
+	picture ret_instruction_2;
+	target_button = 1;
+	code = "buttons";
+} trial_buttons;
+
+## Break Instruction Trial
+trial {
+	trial_duration = forever;
+	trial_type = first_response;
+	all_responses = false;
+	picture pic_breakinstruction;
+	target_button = 1;
+	code = "break";
+} trial_breakinstruction;
+
+## Start With Next Trial
+trial {
+	trial_duration = forever;
+	trial_type = first_response;
+	all_responses = false;
+	picture pic_start;
+	target_button = 1;	
+	code = "start";
+} trial_start;
+
+## Wait for scanner Trial
+trial {
+	stimulus_event {
+		picture pic_wachten;		
+		time=0;
+		code="wachten";
+		} event_wachten1; 
+}trial_wachten;
+
+## Fixation Cross
+trial { 
+   stimulus_event {
+      picture pic_fixationcross;
+      code = "fixation";
+   } event_fixation;
+} trial_fixation;  
+
+## Trial Pause
+trial { 
+   stimulus_event {
+      picture pic_pause;
+      code = "pause";
+   } event_pause;
+} trial_pause;   
+
+## Locations
+trial { 
+   stimulus_event {
+      picture pic_locations;
+      code = "locations";
+   } event_locations;
+} trial_locations;   
+
+## Thank you Screen
+trial {
+   trial_duration = 1992;
+	trial_type = fixed;
+	all_responses = false;
+ stimulus_event {        
+		picture pic_bedankt;
+		response_active = false;
+		code = "bedankt";
+	}event_bedankt;
+}trial_bedankt;
+

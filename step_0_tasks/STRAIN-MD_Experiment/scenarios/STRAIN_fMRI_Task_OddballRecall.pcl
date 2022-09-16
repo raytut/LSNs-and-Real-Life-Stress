@@ -1,0 +1,144 @@
+###################################################################################
+#--------------------------------------------------------------------------------##																											
+#
+#									Stress and Resilience Study									
+#									---------------------------									
+#
+#								  Oddball Recognition PCL Script										
+#
+#
+#--------------------------------------------------------------------------------##
+###################################################################################
+
+##===============================================================================##
+##  Load Oddball Text Files
+##===============================================================================##
+
+## Text File loading for trial order
+string OddRetStimulusSet = "trial_oddret_sub" + string(subjnr) + "_s" + string(session) + "_r"+ string(run)+".txt";	
+input_file oddret_stimset = new input_file;
+
+## Make empty arrays for info from txt
+array <string> oddret_stimname[1][oddret_n_trials];
+array <int> oddret_stimval[1][oddret_n_trials];		  											
+array <int> oddret_stimcat[1][oddret_n_trials];
+
+## Stimfile is located in randlist folder
+oddret_stimset.open( ("trials_odd\\" + OddRetStimulusSet));								
+
+## Load information from stimulus txt file
+int counter_or = 1;												
+loop until																									
+   counter_or > oddret_n_trials 														
+begin
+	oddret_stimname[1][counter_or] = oddret_stimset.get_string();
+	oddret_stimval[1][counter_or] = oddret_stimset.get_int();
+	oddret_stimcat[1][counter_or]= oddret_stimset.get_int();
+	counter_or = counter_or + 1;
+end; 
+
+## Load bitmaps into array
+array <bitmap> oddret_stimbitmap [1][oddret_n_trials];
+loop int i = 1 until i > oddret_n_trials 
+begin
+   oddret_stimbitmap [1] [i]=new bitmap(oddret_stimname[1][i]);
+	oddret_stimbitmap [1] [i].load();
+   i = i + 1;
+end;
+
+##================================================================##
+## 	Oddball  Recognition Task
+##================================================================##
+
+## Ret Load and Present Words ## NEED TO ADD RESPONSES##
+sub oddrec_sub
+begin
+	loop int oddret_count=1 until oddret_count > oddret_n_trials
+	begin
+		
+		# Make Buttons Active
+		trial_button_on.present();
+		
+		# Set Picture
+		face_pic.set_filename(oddret_stimname[1][oddret_count]);
+		face_pic.load();
+		
+		# Log
+		sStimPic= (oddret_stimname[1][oddret_count]);
+		iType = (oddret_stimcat[1][oddret_count]); ##Lure or Target
+		iValence =(oddret_stimval[1][oddret_count]);
+		iButtonPressed = response_manager.total_response_count();
+		
+		# Show Picture
+		opt_oddball.present();
+		iStimOn = clock.time();
+		
+		# Wait for Button Press or 6 sec
+		WaitForButtonpressTime (6000);
+		
+		# Check for Which Button Pressed
+		if iButtonPressed == response_manager.total_response_count() then
+				opt_oddball.present();
+				word_text2.set_caption ("Reageer alsjeblieft sneller");
+				word_text2.redraw();
+				iResp = 0;
+				iRT = 0;
+		elseif iButtonPressed < response_manager.total_response_count () then
+			iResp=response_manager.last_response();
+			iRT = (clock.time() - iStimOn);
+			if iResp == 1 then
+				opt_circle01.set_color(0,255,0, 220);
+				opt_circle01.redraw();
+			elseif iResp==2 then
+				opt_circle02.set_color(0,255,0, 220);
+				opt_circle02.redraw();		
+			elseif iResp == 3 then
+				opt_circle03.set_color(0,255,0, 220);
+				opt_circle03.redraw();
+			elseif iResp== 4 then
+				opt_circle04.set_color(0,255,0, 220);
+				opt_circle04.redraw();
+			elseif iResp == 5 then
+				opt_circle05.set_color(0,255,0, 220);
+				opt_circle05.redraw();
+			elseif iResp== 6 then
+				opt_circle06.set_color(0,255,0, 220);
+				opt_circle06.redraw();
+			end;
+			iButtonPressed = iButtonPressed+1;	
+		end;
+		
+		# Redraw with green circle
+		iStimOff=clock.time();
+		opt_oddball.present();
+		trial_button_off.present();
+		wait (700);
+		
+		# Reset Fixx and Circles
+		opt_circle01.set_color(255, 255, 255, 255);
+		opt_circle01.redraw();
+		opt_circle02.set_color(255, 255, 255, 255);
+		opt_circle02.redraw();
+		opt_circle03.set_color(255, 255, 255, 255);
+		opt_circle03.redraw();
+		opt_circle04.set_color(255, 255, 255, 255);
+		opt_circle04.redraw();
+		opt_circle05.set_color(255, 255, 255, 255);
+		opt_circle05.redraw();
+		opt_circle06.set_color(255, 255, 255, 255);
+		opt_circle06.redraw();
+		
+		# Present Fixation Trial
+		trial_fixx.present();
+		wait (500);
+		
+		# Reset Fixation Text(in case "respond faster" presented)
+		word_text2.set_caption("+");
+		word_text2.redraw();
+		
+		# Update Counter and Log
+		oddret_count=oddret_count+1;
+		WriteToOutputFile2 (sODDRETLogFileDir);
+	end;
+end;
+

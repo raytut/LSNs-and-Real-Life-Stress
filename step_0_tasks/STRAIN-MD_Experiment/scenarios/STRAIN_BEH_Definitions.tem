@@ -1,0 +1,224 @@
+##################################################################################
+#																											#
+#									ALL STIMULUS DEFINITIONS										#
+#																											#
+#																											#
+#																											#
+# 		This file contains all the stimulus definitions sorted by each of the 		#
+#							tasks that are used in the EMA study								#
+#																											#
+#																											#
+##################################################################################
+
+#--------------------------------------------------------------------------------#
+#  									GENERAL DEFINITIONS	 											
+#--------------------------------------------------------------------------------#
+
+
+ picture {text {caption = " + "; font_size = 32;} fixx; x = 0; y = 0;
+	}fixationcross;
+	
+ picture {text {caption = " "; font_size = 38;} word_text; x = 0; y = 0;
+	}word_pic;
+
+	
+#--------------------------------------------------------------------------------#
+#  Word List Task Definitions										
+#--------------------------------------------------------------------------------#
+
+
+# Instructions for free recall session:
+picture {text {caption = "In het begin van het experiment heb je een aantal woorden geleerd.
+In deze taak vragen we je om zo veel mogelijk woorden die je je herinnert in te typen.
+Na ieder woord druk je op Enter. De woorden die je getypt hebt, komen onderaan te staan.\n
+Je krijgt maximaal 7 minuten de tijd. Wanneer je geen woorden meer weet,
+typ dan een 5 en een Enter om de taak eerder te stoppen.\n
+Als alles duidelijk is, druk dan op '2' om te beginnen."; font_size = 26;}; x = 0; y = 0;
+	}freerecall_instruction;
+
+# To be used by free recall session:
+picture {
+	text {caption=" ";}t_Text1; x=0; y=390;
+	text {caption=" ";}t_Text2; x=0; y=330;
+	text{caption="Woorden die je getypt hebt:";} t_Info1; x=0; y=100;
+	text{caption="_________________________________\n\nJe hebt max. 7 minuten de tijd. Als je geen woorden meer weet,\ntyp dan een 5 en een Enter om eerder te stoppen.";} t_Info7; x=0; y=-320;
+   text{caption=" ";} t_Info2; x= 0; y=-150; 
+	text{caption=" ";} t_Info3; x= 0; y=30;
+	text{caption=" ";} t_Info4; x= 0; y=-20;
+	text{caption=" ";} t_Info5; x= 0; y=-70;
+	text{caption=" ";} t_Info6; x= 0; y=-120;
+}p_Text;
+
+# Instructions for recognition recall session:
+picture {text {caption = "Je krijgt nu alle woorden die je geleerd hebt opnieuw te zien.
+Let op: er zitten ook woorden bij die je NIET hebt gezien.\n
+We vragen je om per woord aan te geven hoe zeker
+je bent dat je het wel of niet hebt gezien.\n
+Je geeft dit telkens aan op een schaal van 1 tot 6.
+'1' staat voor 'zeker niet gezien'; '6' voor 'zeker wel gezien'.
+Je gebruikt dus de toesten 1, 2, 3, 4, 5, en 6.\n
+Als alles duidelijk is, druk dan op '2' om te beginnen."; font_size = 26;}; x = 0; y = 0;
+	}wordret_instruction;
+	
+# To be used by recognition recall session:
+picture {text {caption = " "; font_size = 32;} word_text2; x = 0; y = 0;
+			text {caption = "Heel zeker\nniet gezien"; font_size=20;} 	opt_1; x=-560; y=-250;
+			text {caption = "Vrij zeker\nniet gezien"; font_size=20;} 	opt_2; x=-360; y=-250;
+			text {caption = "Beetje zeker\nniet gezien"; font_size=20;} opt_3; x=-160; y=-250;
+			text {caption = "Beetje zeker\nwel gezien"; font_size=20;} 	opt_4; x=160; y=-250;
+			text {caption = "Vrij zeker\nwel gezien"; font_size=20;} 	opt_5; x=360; y=-250;
+			text {caption = "Heel zeker\nwel gezien"; font_size=20;} 	opt_6; x=560; y=-250;
+			ellipse_graphic {ellipse_width= 50; ellipse_height= 50; color= 250,250,250; rotation=30;}opt_circle1;x=-560; y=-180;
+			ellipse_graphic {ellipse_width= 50; ellipse_height= 50; color= 250,250,250; rotation=30;}opt_circle2;x=-360; y=-180;
+			ellipse_graphic {ellipse_width= 50; ellipse_height= 50; color= 250,250,250; rotation=30;}opt_circle3;x=-160; y=-180;
+			ellipse_graphic {ellipse_width= 50; ellipse_height= 50; color= 250,250,250; rotation=30;}opt_circle4;x=160; y=-180;
+			ellipse_graphic {ellipse_width= 50; ellipse_height= 50; color= 250,250,250; rotation=30;}opt_circle5;x=360; y=-180;
+			ellipse_graphic {ellipse_width= 50; ellipse_height= 50; color= 250,250,250; rotation=30;}opt_circle6;x=560; y=-180;
+ }opt_circles;
+
+
+#--------------------------------------------------------------------------------#
+#  N-Back Task Definitions										
+#--------------------------------------------------------------------------------#
+
+# Instructions for N-Back session:	
+
+picture {text {caption = "In deze taak krijg je een serie van cijfers te zien,
+die één voor één gepresenteerd worden.
+Je taak is om telkens aan te geven wanneer het
+cijfer dat je ziet hetzelfde is als twee cijfers geleden.\n
+Voorbeeld: in de volgende serie:\n
+1, 2, 1, 1, 4, 3, 4\n
+geef je twee maal een respons. Namelijk:
+bij de tweede keer '1', en de tweede keer '4'.
+Je reageert dus niet bij de derde keer '1'.\n
+Je geef telkens een respons door op '2' te drukken.
+We kijken zowel naar je nauwkeurigheid als je reactietijden. 
+Als alles duidelijk is, druk dan op '3' om te beginnen."; font_size = 30;}; x = 0; y = 0;
+	}nback_instruction;
+	
+	
+# Definitions for n-back task:
+	
+picture {ellipse_graphic {ellipse_width = 10; ellipse_height = 10; color = 250, 250, 250;rotation = 30; }ellipse1;x = 0; y = 0;
+}fixationdot;
+
+
+# Number Array
+array {
+	text { caption = "1"; font_size=40;font_color=250,250,250; description = "1"; } text1;
+	text { caption = "2"; font_size=40;font_color=250,250,250; description = "2"; };
+	text { caption = "3"; font_size=40;font_color=250,250,250; description = "3"; };
+	text { caption = "4"; font_size=40;font_color=250,250,250; description = "4"; };
+	text { caption = "5"; font_size=40;font_color=250,250,250; description = "5"; };	
+} numbers;
+
+# Trial
+trial {
+	trial_duration = 500; all_responses = true;
+	stimulus_event 
+		{picture {text text1; x =0; y =0;} pic; time = 0; duration = 500;} event33;
+} nback;
+	
+	
+#--------------------------------------------------------------------------------#
+#  Matrix Task Definitions										
+#--------------------------------------------------------------------------------#
+
+
+# Matrices instructions + practice:
+picture {text {caption = "Je gaat nu een taak doen waarbij je telkens een selectie 
+van tekeningen/matrices te zien krijgt. 
+Telkens ontbreekt het negende exemplaar uit de serie.\n
+Het is jouw taak om uit 8 mogelijkheden de correcte optie 
+te kiezen, die de serie op de juiste manier compleet maakt.\n
+Klik op '2' om naar de volgende pagina te gaan."; font_size = 26;}; x = 0; y = 0;
+	}matrix_instruction_1;
+	
+picture {text {caption = "Er is telkens één juiste optie te selecteren, door te 
+letten op de patronen die in de series voorkomen.
+De patronen kunnen horizontaal, verticaal en/of diagonaal zijn.\n
+Allereerst geven we je 3 voorbeelden van items uit deze taak.
+In de echte taak zullen de opties onderaan de pagina staan,
+in plaats van naast de grote afbeelding.\n
+Na de 3 voorbeelden krijg je nog één instructiepagina te zien.\n
+Klik op '2' om naar het eerste voorbeeld te gaan."; font_size = 26;}; x = 0; y = 0;
+	}matrix_instruction_2;
+	
+picture {text {caption = "De taak zal bestaan uit 18 van zulke opdrachten/items. 
+Het zal vrij makkelijk beginnen, maar snel moeilijker worden.\n
+Je selecteert één van de acht opties met de knoppen 1 t/m 8.
+Je geselecteerde optie zal dan een blauw rondje krijgen.
+Voordat het volgende item komt krijg je enkele seconden rust.\n
+Per item krijg je maximaal 60 seconden de tijd. 
+Let op: we letten niet alleen op het aantal goede 
+antwoorden dat je geeft, maar ook op hoe snel je bent.\n
+Als je nog vragen hebt over de taak, stel deze dan nu.
+Als alles duidelijk is, druk dan op '2' om de taak te starten. "; font_size = 26;}; x = 0; y = 0;
+	}matrix_instruction_6;
+	
+
+picture {bitmap { filename = "practice_matrix_1.jpg"; } prac_mat1; x = 0; y = 200;
+   text {caption = "Voorbeeld 1: hier is optie 6 de juiste keuze. Waarom?\n
+1) Horizontaal, verticaal en diagonaal gezien gaan de cirkels 
+     geleidelijk aan uit elkaar.
+2) Verticaal gezien moeten er twee cirkels naast elkaar staan.
+3) Horizontaal gezien moeten er twee cirkels boven elkaar staan.\n
+Het negende plaatje moet dus een vierkant van 4 cirkels zijn,
+die elkaar niet raken. Het juiste antwoord is dus optie 6.\n
+Klik op '2' om naar het volgende voorbeeld te gaan."; font_size=22;} prac_1; x=0; y=-150;
+	}matrix_example_1;
+
+picture {bitmap { filename = "practice_matrix_2.jpg"; } prac_mat2; x = 0; y = 200;
+   text {caption = "Voorbeeld 2: hier is optie 8 de juiste keuze.\n
+De reden: zowel horizontaal als verticaal gezien is telkens 
+het derde plaatje uit de rij of kolom een combinatie/optelling
+van de eerste twee plaatjes.\n
+Wanneer je zowel de twee items uit de derde rij als die uit
+de derde kolom 'optelt', krijg je optie 8.\n
+Klik op '2' om naar het laatste voorbeeld te gaan."; font_size=22;} prac_2; x=0; y=-150;
+	}matrix_example_2;
+
+picture {bitmap { filename = "practice_matrix_3.jpg"; } prac_mat3; x = 0; y = 200;
+   text {caption = "Voorbeeld 3: hier is optie 2 de juiste keuze.\n
+Reden: zowel horizontaal als verticaal gezien is telkens het
+derde plaatje uit de rij of kolom een verschil/aftrekking:
+het tweede plaatje wordt 'afgetrokken' van het eerste,
+en dat levert dan het derde plaatje op.\n
+Als je het zo bekijkt, zie je dat optie 2 de juiste is.\n
+Klik op '2' om naar de laatste instructiepagina te gaan."; font_size=22;} prac_3; x=0; y=-150;
+	}matrix_example_3;
+
+
+# To be used by matrices test:
+picture {bitmap { filename = "mat_set_A_01.bmp"; } matrix_pic; x = 0; y = 0;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle1;x=-191; y=-53;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle2;x=-55; y=-53;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle3;x=75; y=-53;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle4;x=204; y=-53;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle5;x=-192; y=-172;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle6;x=-56; y=-171;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle7;x=75; y=-171;
+			ellipse_graphic {ellipse_width= 22; ellipse_height= 22; color= 125,125,125; rotation=30;}opt_matcircle8;x=204; y=-171;
+ }opt_matrices;
+
+
+#--------------------------------------------------------------------------------#
+#  Trials   
+#--------------------------------------------------------------------------------#
+
+## Fixation Trial
+trial {trial_duration = 1999; all_responses = false;
+    stimulus_event {picture opt_circles; time = 0;} event_fixx;
+} trial_fixx;
+
+## Button Active Trial
+trial {trial_duration = 1; all_responses = true;
+} trial_resp_on;
+
+## Button Inactive Trial
+trial {trial_duration = 1; all_responses = false;
+} trial_resp_off;
+
+
+

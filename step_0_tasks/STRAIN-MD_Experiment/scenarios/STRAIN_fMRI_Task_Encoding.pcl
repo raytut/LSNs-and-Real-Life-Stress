@@ -1,0 +1,310 @@
+##################################################################################
+#																											#
+#  									 	ENCODING TASK												#
+#																											#
+#																											#
+#				Task that shows images in locations for subjects to remeber				#
+#																											#
+#																											#
+##################################################################################
+#--------------------------------------------------------------------------------#
+# 										Text File Settings 										
+#--------------------------------------------------------------------------------#
+
+## Stimulus Text File
+string EncStimulusSet = "trial_enc_sub"+string(subjnr) +"_s"+string(session) + "_r"+ string(run)+ ".txt";
+input_file enc_stimset = new input_file;
+
+## Make Empty Array to Use for Txt File
+array <string> enc_stimname [1][enc_n_trials];	   #bitmap names
+array <int> enc_stimcat [1][enc_n_trials];			#stimulus category (1:4)
+array <int> enc_stimloc [1][enc_n_trials];			#associated locations 
+array <int> enc_isitime [1][enc_n_trials];			#ISI time
+
+## Set Stimulus File Location
+enc_stimset.open( ("trials_mem\\" + EncStimulusSet));								
+logfile.add_event_entry("running_randlist\\" + EncStimulusSet);
+
+## Load Information from Text File
+int enc_counter = 1;									#declare int to start loop counter
+loop until												#loop until all info is read from stimulus txt file															
+   enc_counter > enc_n_trials														
+begin
+	enc_stimname[1][enc_counter] = enc_stimset.get_string();
+	enc_stimcat[1][enc_counter] = enc_stimset.get_int();
+	enc_stimloc[1][enc_counter] = enc_stimset.get_int();
+	enc_isitime[1][enc_counter] = enc_stimset.get_int();
+	enc_counter = enc_counter + 1;
+end; 
+
+## Load BMPs Into Array
+array <bitmap> enc_stimbitmap [1][enc_n_trials];
+loop int i = 1 until i > enc_n_trials 
+begin
+   enc_stimbitmap [1] [i]=new bitmap(enc_stimname[1][i]);
+	enc_stimbitmap [1] [i].load();
+   i = i + 1;
+end;
+
+#--------------------------------------------------------------------------------#
+# 								Encoding Settings + Variables										
+#--------------------------------------------------------------------------------#
+
+## Present Welcome and Instructions
+trial_encoding_welkom1.present();	#task instruction
+trial_breakinstruction.present();   #instruction for *** break
+trial_start.present();              #start with next slide screen
+trial_wachten.present();            #wachten op scanner
+
+
+## Initialize Variables 
+int begin_isi;					#begin isi
+int dur_isi;					#duration isi from stimfile
+int begin_bmp_center;      #begin picture at center of screen
+int dur_bmp_center = 495;	#show the picture at center (before target)
+int begin_target;				#begin to show target
+int dur_target = 495;		#duration target is shown in green (simultaneously with picture)
+int begin_move;
+int begin_bmploc;          #begin show picture at location
+int dur_bmploc = 1995;   	#duration picture is shown at correct location
+int end_bmploc;
+int dur_trial;
+
+int begin_break;
+int dur_break = 25000;		#show a break for 25 seconds
+int end_break;
+int time_break;
+bool makebreak = false;
+
+## Initialize Trial Variables
+int stage;
+bool clock_setting = false;
+bool moved = false;
+array<int> xloc_targets[4] = { -280,-280,  280,  280}; 
+array<int> yloc_targets[4] = { -200, 200, 200,  -200};
+int current_stim;								#counts through trials and breaks
+int trialcounter;								#counts through trial list
+int totalcount = enc_n_trials + 2; 		#nr of trials + nr of breaks (=2)
+int startloop = clock.time();
+
+
+#--------------------------------------------------------------------------------#
+# 								Encoding Subroutines 										
+#--------------------------------------------------------------------------------#
+
+## Show Fixation and Locations
+sub show_fixationcross_loc
+begin
+	pic_locations.set_part( 1, circle_white); 
+   pic_locations.set_part( 2, circle_white); 
+   pic_locations.set_part( 3, circle_white); 
+   pic_locations.set_part( 4, circle_white); 
+   pic_locations.set_part( 5, RPLstudy_fixationcross); 
+   pic_locations.set_part_x ( 5, 0);
+   pic_locations.set_part_y ( 5, 0);
+end;
+
+## Show Picture in Center + Location of Picture
+sub show_bmp_center (int k)
+begin
+   pic_locations.set_part( 5, enc_stimbitmap[1][k]);
+   pic_locations.set_part_x ( 5, 0);
+   pic_locations.set_part_y ( 5, 0);
+end;
+
+## Shows Target
+sub show_target (int k)
+begin
+	pic_locations.add_part(circle_green,xloc_targets[enc_stimloc[1][k]],yloc_targets[enc_stimloc[1][k]])
+end;  
+
+## Move Pictures
+sub move_stimulus (int k)
+begin
+   double speed = 20.0; # speed with face moves to location. Higher=slower.
+   pic_locations.set_part( 5, enc_stimbitmap[1][k]);
+   pic_locations.set_part_x ( 5, 0);
+   pic_locations.set_part_y ( 5, 0);
+   loop
+      int end_x = xloc_targets[enc_stimloc[1][k]];
+      int end_y = yloc_targets[enc_stimloc[1][k]];
+      double xstep_d = double(end_x) / speed;
+      double ystep_d = double(end_y) / speed;
+      int x = 0;
+      double x_d = 0.0;
+      double y_d = 0.0;
+      int y = 0;
+   until
+      abs(x) >= abs(end_x) && abs(y) >= abs(end_y)
+   begin
+      pic_locations.set_part_x( 5, x );
+      pic_locations.set_part_y( 5, y );
+      pic_locations.present();
+      x_d = x_d + xstep_d;
+      x = int (x_d);
+      y_d = y_d + ystep_d;
+      y = int (y_d);
+   end;
+   moved = true;
+end;
+
+## Remove Picture Part (BMP)
+sub remove_stimulus (int pic_part)
+begin
+   pic_locations.set_part(pic_part,mask );    
+end; 
+
+## Show Break
+sub show_break
+begin
+	trial_pause.present();
+	clock_setting = true;
+	begin_break = clock.time();
+	loop until clock.time() >= begin_break + dur_break 
+	begin;	
+	end;
+	end_break = clock.time();
+	time_break = end_break - begin_break;
+end;
+
+#--------------------------------------------------------------------------------#
+# 										Encoding Task										
+#--------------------------------------------------------------------------------#
+
+sub enc_subroutine (int k)
+begin
+	loop
+		current_stim = 1; trialcounter = 1;
+		## Stage 1=Fixation 
+		stage = 1;			
+		begin_bmploc = 0;
+		clock_setting = false;
+		makebreak = false;
+	until current_stim > totalcount
+	begin
+		## Checks for Break time
+		if makebreak == true then
+			show_break();				#subroutine: present break for 25 seconds
+			clock_setting = false;	
+			makebreak = false;		#go to trial again
+			stage = 1;					#and start with isi
+			current_stim = current_stim + 1;
+		
+		## If not break, then Set Locations
+		elseif makebreak == false then
+			pic_locations.set_part_x ( 1, -280); #location 1, lower left
+			pic_locations.set_part_y ( 1, -200);
+			pic_locations.set_part_x ( 2, -280); #location 2, top left
+			pic_locations.set_part_y ( 2, 200);
+			pic_locations.set_part_x ( 3, 280);  #location 3, top right
+			pic_locations.set_part_y ( 3, 200);
+			pic_locations.set_part_x ( 4, 280);	 #location 4, lower right
+			pic_locations.set_part_y ( 4, -200);
+			xloc_targets = { -280,-280,  280,  280};  
+			yloc_targets = { -200, 200, 200,  -200};
+			
+			## STAGE 1: show fixationcross for dur_isi##
+			if (stage == 1) then
+				if clock_setting == false then 
+					show_fixationcross_loc(); 						#subroutine: show locations and fixation cross	
+					begin_isi = clock.time();  					#starttime of isi
+					dur_isi = enc_isitime[1][trialcounter]; 	#duration of isi from stimfile
+					clock_setting = true;							#start checking time
+				end;   													#show until time is up
+				if clock.time() >= begin_isi + dur_isi then 
+					clock_setting = false;							#stop checking time
+					stage = 2;  										#go to next stage
+				end;
+
+			## STAGE 2: show bmp and locations dur_bmp_loc_view##
+			elseif (stage == 2) then
+				if clock_setting == false then		  
+					show_bmp_center(trialcounter);		#subroutine: add picture to center
+					iStimOn = clock.time();
+					begin_bmp_center = clock.time();		#starttime showing picture
+					
+					# Log Picture
+					sStimPic = enc_stimname[1][trialcounter];
+					clock_setting = true;
+				end;
+				if clock.time() >= begin_bmp_center + dur_bmp_center then	
+					clock_setting = false;
+					stage = 3;
+				end;
+		
+			## STAGE 3: show correct location for dur_target##
+			elseif (stage == 3) then
+				if clock_setting == false then
+					show_target(trialcounter);  			#subroutine: show green target circle
+					begin_target = clock.time();					
+					clock_setting = true;
+				end;
+				if clock.time() >= begin_target + dur_target then
+					stage = 4;
+				end;
+
+			## STAGE 4: move bmp to target##
+			elseif (stage == 4) then   
+				if moved == false then   
+					pic_locations.remove_part(6);			#subroutine: remove picture part
+					move_stimulus(trialcounter);			#subroutine: move picture to target location
+					begin_move = clock.time();
+				else
+					clock_setting = false;
+					stage = 5;
+				end;
+		
+			## STAGE 5: show bmp at target location for dur_bmploc
+			elseif (stage == 5) then     
+				if clock_setting == false then			#show bmp at correct location until time is up
+					begin_bmploc = clock.time();
+					clock_setting = true;
+				end;
+				if clock.time() >= begin_bmploc + dur_bmploc then
+					end_bmploc = clock.time();
+					iStimOff = clock.time();
+					remove_stimulus(5);						#remove picture from center and start again with ISI
+					dur_trial = end_bmploc-begin_bmp_center;
+					
+					## Log
+					iValence = enc_stimcat[1][trialcounter];
+					iCorrectLocation = enc_stimloc[1][trialcounter];
+					WriteToOutputFile(sENCLogFileDir);
+					
+					# Reset Values
+					current_stim = current_stim + 1;		#count to next stimulus (including break counter)
+					trialcounter = trialcounter + 1;		#count to next trial
+					stage = 1;									#go back to stage 1, ISI
+					clock_setting = false;					#stop checking time
+					moved = false;	
+					
+					# Take a break
+					if trialcounter == 21 then
+						makebreak = true;
+					elseif trialcounter == 42 then
+						makebreak = true;
+					end;							
+				end;
+			end;
+			
+			# Present Trial
+			trial_locations.present(); 
+		end;
+	end;
+end;
+
+## Before the end, show a 5s fixation cross
+sub enc_endroutine (int k)
+begin
+	trial_fixation.present();
+	int begin_lastfix = clock.time();
+	int dur_lastfix = 4995;
+	loop until clock.time() >= begin_lastfix + dur_lastfix
+	begin
+	end;
+int end_lastfix = clock.time();
+
+## Show Thank You Screen
+trial_bedankt.present();
+end;
+

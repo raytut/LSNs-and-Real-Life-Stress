@@ -1,0 +1,180 @@
+##################################################################################
+#																											#
+#								SETTINGS AND GENERAL SUBROUTINES									#
+#																											#
+#																											#
+# 	This will allow you to change some settings, and also includes standard 		#
+#							useful subroutines that might come in handy						#
+#																											#
+##################################################################################
+
+#--------------------------------------------------------------------------------#
+# 		Settings 													
+#--------------------------------------------------------------------------------#
+
+# Trials Per Run
+int trial_per_run = 21;
+int ret_n_trials = 21;
+int enc_n_trials = 63;
+
+# Variables
+int StartAtTrigger=6;
+int triggered=1;
+int trialcount;
+
+# Other
+int stimduur = 6000;
+int iButtonPressed;
+
+# Subject Settings
+int subjnr=001;
+if int(logfile.subject()) > 0  then
+	subjnr = int(logfile.subject());
+end;
+
+
+# Log File Names
+
+string sBehLog = "Sub"+string(subjnr)+"_BEH_s"+string(session)+".txt";
+string sWordRecall = "Sub"+string(subjnr)+"_WordRecall_s"+string(session)+".txt";
+
+#--------------------------------------------------------------------------------#
+# 	Log File Subs													
+#--------------------------------------------------------------------------------#
+
+## Log Variables
+string sStimPic;
+int iStimOn;int iStimOff;
+int iBlockOn;int iBlockOff;
+int iExperimentOn;int iExperimentOff;
+int iCorrectAns;
+
+## Button Press Log	
+int iResp;
+int iResp1;
+int iResp2;
+int iRT; 
+int pressed;
+int iTrial;
+int iStimVal;
+int iStimType;
+
+## Make Log File + Give Name
+output_file OutputFile=new output_file;
+
+sub MakeOutputFile (string FileName) begin
+	OutputFile.open_append(FileName);
+	OutputFile.print("iTrial \tStimPic \tStimOn \tStimOff \tRT \tResp \tCorrect_Ans \tStimVal \tStimType \n");
+	OutputFile.close();
+end;
+
+## Writeout to Log Subroutine
+sub WriteToOutputFile(string sFileName)begin
+	OutputFile.open_append(sFileName);
+	OutputFile.print(string(iTrial)+"\t"+sStimPic+"\t"+string(iStimOn)+"\t"+string(iStimOff)+"\t"+string(iRT)+"\t"+string(iResp)+"\t"+string(iCorrectAns)+"\t"+string(iStimVal)+"\t"+string(iStimType)+"\n");
+	OutputFile.close();
+end;
+
+
+#---------------------------------------------------------------------------------
+# 		Timing Subroutines
+#---------------------------------------------------------------------------------
+
+## Waits until a given endtime
+sub waituntill ( int endtime ) begin
+   loop until clock.time() >= endtime
+   begin
+   end;
+end;
+
+## Waits a given time
+sub wait(int waittime) begin
+	loop int clocktime = clock.time();
+	until clock.time() - clocktime >= waittime
+	begin 
+	end;
+end;
+
+
+#---------------------------------------------------------------------------------
+# 		Buttonpress Subroutines
+#---------------------------------------------------------------------------------
+
+## Waits untill any button is pressed
+sub waitforbuttonpress begin
+	loop	int Current_response_count = response_manager.total_response_count()
+	until		Current_response_count < response_manager.total_response_count()
+	begin																
+	end;									#Return the number of the button pressed
+end;
+
+## Wait Subroutine
+sub Wait (int iDurWait) begin
+	int iTimeStamp;
+	loop iTimeStamp = clock.time(); until clock.time()>=iTimeStamp + iDurWait
+	begin
+	end;
+end;
+
+## Wait for Buttonpress
+sub WaitForAllButtonpress begin
+	int iKeyCount = response_manager.total_response_count();
+	string sKeyboardInput;
+	loop sKeyboardInput until iKeyCount< response_manager.total_response_count()
+	begin
+	end;	
+end;
+
+## Wait for Specific Buttonpress
+sub WaitForSpecButtonpress (int k) begin
+   int iSpecButton = response_manager.total_response_count(k);
+   loop until iSpecButton< response_manager.total_response_count(k)
+   begin
+   end;    
+end;
+
+
+## Wait for Buttonpress or Time
+sub WaitForButtonpressTime (int iDurWait) begin
+	int iTimeStamp;
+	int RGButton = response_manager.total_response_count();
+	iTimeStamp = clock.time();
+	string sKeyboardInput;
+	loop sKeyboardInput until RGButton< response_manager.total_response_count() || clock.time()>=iTimeStamp + iDurWait
+	begin
+	end;
+	if clock.time()>=iTimeStamp + iDurWait then # Display 'Respons faster' if time is up
+		word_text2.set_caption("Reageer a.u.b. sneller!");
+		word_text2.redraw();
+		iResp=0;
+	end;
+end;
+
+#---------------------------------------------------------------------------------
+#		Text Subroutines
+#---------------------------------------------------------------------------------
+
+## Puts Text on Screen
+sub showtext( string message )
+begin	
+   word_text.set_caption( message );
+   word_text.redraw();
+   word_pic.present();
+end;
+
+
+string sKeyboardInput;
+string sText;
+string sText2;
+string sText3;
+string sText4;
+string sText5;
+
+sub GetKeyboardInput(string sInpStr)
+begin
+	t_Text1.set_caption(sInpStr);
+	t_Text1.redraw();
+	system_keyboard.set_case_mode(3);
+	sKeyboardInput=system_keyboard.get_input(p_Text, t_Text2);
+	sStimPic = sKeyboardInput;
+end;	
