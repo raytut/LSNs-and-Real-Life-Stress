@@ -1,7 +1,7 @@
 # Shifts in large-scale networks under stress are linked to affective reactivity to stress in daily life
 
 
-This is the repository containing code used for the study **"Shifts in large-scale networks under stress are linked to affective reactivity to stress in daily life"**. A description of the processing pipeline is given below, along with the associated scripts used at each step. The analysis notebook with the data processing and statistics run in R can be found [here](https://raytut.github.io/Large-Scale-Networks-and-Real-Life-Stress/). 
+This is the repository containing code used for the study **"Shifts in large-scale networks under stress are linked to affective reactivity to stress in daily life"**. A description of the processing pipeline is given below, along with the associated scripts used at each step. The analysis notebook with the data processing and statistics run in R can be found [here](https://raytut.github.io/LSNs-and-Real-Life-Stress/). 
 
 
 ## Step 0: MRI and Behavioral Task
