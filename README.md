@@ -6,7 +6,7 @@ This is the repository containing code used for the study **"Shifts in large-sca
 
 ## Step 0: MRI and Behavioral Task
 
-The MRI tasks were programmed in Presentation (NeuroBS) and can be founnd in this directory.
+The MRI tasks were programmed in Presentation (NeuroBS) and can be found in this directory.
 
 ## Step 1: Image preparation
 
